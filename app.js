@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '1.1.0',
+  APP_VERSION: '1.1.1',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы'],
   // Демо-списка здесь нет намеренно: номера принимаются только из реального
   // автопарка (лист Fleet). Он загружается с сервера и кэшируется в IndexedDB.
@@ -288,16 +288,21 @@ function uuid() {
 
 async function sendPayload(payload) {
   // Apps Script на POST отвечает редиректом на script.googleusercontent.com,
-  // который не отдаёт CORS-заголовков. В обычном режиме браузер блокирует чтение
-  // ответа и fetch падает — хотя запись в таблицу уже произошла.
-  // Поэтому шлём в режиме no-cors: ответ прочитать нельзя (res.type === 'opaque'),
-  // но доставка гарантирована. Дубли отсекаются на сервере по client_id.
+  // который не отдаёт CORS-заголовков. Прочитать ответ нельзя — шлём в no-cors.
   await fetch(CONFIG.API_URL, {
     method: 'POST',
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain → без preflight
     body: JSON.stringify(payload)
   });
+  // Ответ POST не читается, поэтому доставку подтверждаем отдельным GET —
+  // он проходит через CORS нормально. Иначе ошибки записи остаются невидимыми.
+  await new Promise((r) => setTimeout(r, 1200));
+  const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) +
+              '&check_id=' + encodeURIComponent(payload.client_id);
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!data.delivered) throw new Error('not_delivered');
   return { ok: true };
 }
 
@@ -349,6 +354,8 @@ async function submit() {
     const note = $('#thanks-note');
     if (String(e.message) === 'not_configured') {
       note.textContent = 'Приложение не настроено: не указан адрес сервера. Обратитесь к администратору.';
+    } else if (String(e.message) === 'not_delivered') {
+      note.textContent = 'Сервер не подтвердил запись. Ответ сохранён и будет отправлен повторно автоматически.';
     } else if (!navigator.onLine) {
       note.textContent = 'Нет связи — ответ сохранён и будет отправлен автоматически, когда появится интернет.';
     } else {
