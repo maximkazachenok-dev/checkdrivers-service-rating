@@ -3,8 +3,8 @@
 
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec',
-  SHARED_TOKEN: 'Primum-fleet-8842-xyz',
-  APP_VERSION: '1.0.0',
+  SHARED_TOKEN: 'primum-fleet-8842-xyz',
+  APP_VERSION: '1.0.1',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы'],
   // Стартовая база ТС на случай первого офлайн-запуска (пока сеть не отдала свежую).
   FLEET_FALLBACK: {
@@ -88,8 +88,16 @@ async function loadFleet() {
     if (data.ok && Array.isArray(data.tractors)) {
       state.fleet = { tractors: data.tractors, trailers: data.trailers || [] };
       await idbPut('kv', state.fleet, 'fleet').catch(() => {});
+      console.info('[PRIMUM] База ТС загружена: тягачей', data.tractors.length,
+                   ', прицепов', (data.trailers || []).length);
+    } else if (data.error === 'unauthorized') {
+      console.error('[PRIMUM] Неверный SHARED_TOKEN — не совпадает с Code.gs');
+    } else {
+      console.error('[PRIMUM] Сервер вернул ошибку:', data.error);
     }
-  } catch (_) { /* офлайн — работаем на кэше */ }
+  } catch (e) {
+    console.warn('[PRIMUM] Сервер недоступен, работаем на кэше базы ТС:', e.message);
+  }
 }
 
 /* ---------- Автокомплит ---------- */
@@ -193,14 +201,18 @@ function uuid() {
 }
 
 async function sendPayload(payload) {
-  const res = await fetch(CONFIG.API_URL, {
+  // Apps Script на POST отвечает редиректом на script.googleusercontent.com,
+  // который не отдаёт CORS-заголовков. В обычном режиме браузер блокирует чтение
+  // ответа и fetch падает — хотя запись в таблицу уже произошла.
+  // Поэтому шлём в режиме no-cors: ответ прочитать нельзя (res.type === 'opaque'),
+  // но доставка гарантирована. Дубли отсекаются на сервере по client_id.
+  await fetch(CONFIG.API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain → без CORS-preflight к Apps Script
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain → без preflight
     body: JSON.stringify(payload)
   });
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'server_error');
-  return data;
+  return { ok: true };
 }
 
 async function flushQueue() {
@@ -239,15 +251,23 @@ async function submit() {
   // Сначала кладём в очередь (гарантия сохранности), потом пытаемся отправить.
   await idbPut('queue', payload).catch(() => {});
   try {
-    if (CONFIG.https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec.startsWith('PASTE')) throw new Error('not_configured');
+    if (CONFIG.API_URL.startsWith('PASTE')) throw new Error('not_configured');
     await sendPayload(payload);
     await idbDel('queue', payload.client_id);
     goTo('view-thanks');
     $('#thanks-note').textContent = 'Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.';
   } catch (e) {
-    // Нет сети / не настроено — ответ уже в очереди, покажем это честно
+    // Различаем реальный офлайн и проблему конфигурации — иначе диагностика невозможна.
+    console.error('[PRIMUM] Ошибка отправки:', e);
     goTo('view-thanks');
-    $('#thanks-note').textContent = 'Нет связи — ответ сохранён и будет отправлен автоматически, когда появится интернет.';
+    const note = $('#thanks-note');
+    if (String(e.message) === 'not_configured') {
+      note.textContent = 'Приложение не настроено: не указан адрес сервера. Обратитесь к администратору.';
+    } else if (!navigator.onLine) {
+      note.textContent = 'Нет связи — ответ сохранён и будет отправлен автоматически, когда появится интернет.';
+    } else {
+      note.textContent = 'Сервер недоступен. Ответ сохранён и будет отправлен повторно автоматически.';
+    }
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       navigator.serviceWorker.ready.then((reg) => reg.sync.register('primum-flush')).catch(() => {});
     }
