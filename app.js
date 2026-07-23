@@ -239,7 +239,7 @@ async function submit() {
   // Сначала кладём в очередь (гарантия сохранности), потом пытаемся отправить.
   await idbPut('queue', payload).catch(() => {});
   try {
-    if (CONFIG.API_URL.startsWith('PASTE')) throw new Error('not_configured');
+    if (CONFIG.https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec.startsWith('PASTE')) throw new Error('not_configured');
     await sendPayload(payload);
     await idbDel('queue', payload.client_id);
     goTo('view-thanks');
