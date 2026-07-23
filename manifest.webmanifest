@@ -1,0 +1,18 @@
+{
+  "name": "PRIMUM — Оценка автосервисов",
+  "short_name": "PRIMUM",
+  "description": "Опрос водителей о качестве ремонта в автосервисах PRIMUM",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#2C3136",
+  "theme_color": "#2C3136",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
