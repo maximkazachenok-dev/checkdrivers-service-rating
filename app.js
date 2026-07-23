@@ -4,13 +4,10 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '1.0.1',
+  APP_VERSION: '1.1.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы'],
-  // Стартовая база ТС на случай первого офлайн-запуска (пока сеть не отдала свежую).
-  FLEET_FALLBACK: {
-    tractors: ['AB 1234-7', 'AC 2841-7', 'AE 5502-1', 'BM 7719-2', 'KX 3360-5'],
-    trailers: ['A 5678 B-7', 'A 1120 C-7', 'A 8843 K-1', 'A 4407 M-2', 'A 9915 P-5']
-  }
+  // Демо-списка здесь нет намеренно: номера принимаются только из реального
+  // автопарка (лист Fleet). Он загружается с сервера и кэшируется в IndexedDB.
 };
 
 /* ---------- Мини-обёртка над IndexedDB ---------- */
@@ -63,7 +60,8 @@ async function idbDel(store, key) {
 
 /* ---------- Состояние ---------- */
 const state = {
-  fleet: CONFIG.FLEET_FALLBACK,
+  fleet: { tractors: [], trailers: [] },
+  fleetLoaded: false,
   tractor: '',
   trailer: '',
   service: '',
@@ -78,15 +76,20 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 async function loadFleet() {
   // 1) из кэша IndexedDB — мгновенно и офлайн
   const cached = await idbGet('kv', 'fleet').catch(() => null);
-  if (cached && cached.tractors) state.fleet = cached;
+  if (cached && cached.tractors && cached.tractors.length) {
+    state.fleet = cached;
+    state.fleetLoaded = true;
+    updateFleetStatus();
+  }
   // 2) обновление с сервера, если есть сеть
-  if (!navigator.onLine || CONFIG.API_URL.startsWith('PASTE')) return;
+  if (!navigator.onLine || CONFIG.API_URL.startsWith('PASTE')) { updateFleetStatus(); return; }
   try {
     const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN);
     const res = await fetch(url);
     const data = await res.json();
     if (data.ok && Array.isArray(data.tractors)) {
       state.fleet = { tractors: data.tractors, trailers: data.trailers || [] };
+      state.fleetLoaded = true;
       await idbPut('kv', state.fleet, 'fleet').catch(() => {});
       console.info('[PRIMUM] База ТС загружена: тягачей', data.tractors.length,
                    ', прицепов', (data.trailers || []).length);
@@ -98,9 +101,40 @@ async function loadFleet() {
   } catch (e) {
     console.warn('[PRIMUM] Сервер недоступен, работаем на кэше базы ТС:', e.message);
   }
+  updateFleetStatus();
+  validateAuth();
+}
+
+/** Если автопарк не загружен — поля блокируются, иначе водитель упрётся
+ *  в «номер не найден» и не поймёт, что дело в отсутствии базы. */
+function updateFleetStatus() {
+  const banner = $('#fleet-status');
+  const ready = state.fleetLoaded && state.fleet.tractors.length > 0;
+  $('#in-tractor').disabled = !ready;
+  $('#in-trailer').disabled = !ready;
+  if (ready) {
+    banner.hidden = true;
+  } else {
+    banner.hidden = false;
+    banner.textContent = navigator.onLine
+      ? 'Не удалось загрузить список автопарка. Проверьте подключение и обновите страницу.'
+      : 'Нет связи. Список автопарка загрузится при первом подключении к интернету.';
+  }
 }
 
 /* ---------- Автокомплит ---------- */
+/* Кириллические буквы, визуально совпадающие с латиницей: на телефоне водитель
+   часто набирает номер в русской раскладке, и "АВ" (кир.) не равно "AB" (лат.). */
+const CYR_TO_LAT = { 'А':'A','В':'B','С':'C','Е':'E','Н':'H','К':'K','М':'M',
+                     'О':'O','Р':'P','Т':'T','У':'Y','Х':'X','І':'I' };
+
+/** Приводим номер к виду для поиска: верхний регистр, латиница, без пробелов и дефисов. */
+function normPlate(s) {
+  return String(s).toUpperCase()
+    .replace(/[А-ЯЁІ]/g, (ch) => CYR_TO_LAT[ch] || ch)
+    .replace(/[^A-Z0-9]/g, '');
+}
+
 function setupAutocomplete(inputSel, listSel, kind) {
   const input = $(inputSel);
   const list = $(listSel);
@@ -117,11 +151,19 @@ function setupAutocomplete(inputSel, listSel, kind) {
   }
 
   function filter() {
-    const q = input.value.trim().toUpperCase().replace(/\s+/g, ' ');
+    const q = normPlate(input.value);
     active = -1;
-    if (!q) { render(source().slice(0, 8)); return; }
-    const items = source().filter((n) => n.toUpperCase().replace(/\s+/g, ' ').includes(q)).slice(0, 8);
-    render(items);
+    // Список не показываем, пока водитель не начал вводить номер.
+    if (!q) { list.hidden = true; list.innerHTML = ''; return; }
+    // Сначала совпадения с начала номера, затем вхождения в середине.
+    const all = source();
+    const starts = [], contains = [];
+    for (const n of all) {
+      const nn = normPlate(n);
+      if (nn.startsWith(q)) starts.push(n);
+      else if (nn.includes(q)) contains.push(n);
+    }
+    render(starts.concat(contains).slice(0, 8));
   }
 
   function choose(val) {
@@ -131,10 +173,20 @@ function setupAutocomplete(inputSel, listSel, kind) {
     validateAuth();
   }
 
-  input.addEventListener('focus', filter);
+  // На фокус список НЕ раскрываем — подсказки появляются только после ввода.
   input.addEventListener('input', () => {
     if (kind === 'tractor') state.tractor = input.value.trim(); else state.trailer = input.value.trim();
-    filter(); validateAuth();
+    // Во время набора ошибку не показываем — только снимаем, если стала валидной.
+    const errSel = kind === 'tractor' ? '#err-tractor' : '#err-trailer';
+    setFieldError(inputSel, errSel, '');
+    filter();
+    const t = !!matchPlate(state.tractor, 'tractor');
+    const tr = !state.trailer.trim() || !!matchPlate(state.trailer, 'trailer');
+    $('#btn-next').disabled = !(t && tr);
+  });
+  // Уход с поля — момент показать ошибку, если номер не из автопарка.
+  input.addEventListener('blur', () => {
+    setTimeout(() => { list.hidden = true; validateAuth(); }, 150);
   });
   input.addEventListener('keydown', (e) => {
     const items = Array.from(list.querySelectorAll('li'));
@@ -163,9 +215,43 @@ function goTo(id) {
 }
 
 /* ---------- Валидация ---------- */
+/** Ищет номер в базе. Возвращает канонический вид из Fleet или null. */
+function matchPlate(value, kind) {
+  const q = normPlate(value);
+  if (!q) return null;
+  const list = kind === 'tractor' ? state.fleet.tractors : state.fleet.trailers;
+  for (const n of list) if (normPlate(n) === q) return n;
+  return null;
+}
+
 function validateAuth() {
-  const t = state.tractor.trim();
-  $('#btn-next').disabled = !t; // прицеп необязателен, тягач обязателен
+  const tRaw = state.tractor.trim();
+  const trRaw = state.trailer.trim();
+
+  // Тягач обязателен и должен быть в автопарке.
+  const tOk = !!matchPlate(tRaw, 'tractor');
+  // Прицеп необязателен, но если введён — тоже должен быть в автопарке.
+  const trOk = !trRaw || !!matchPlate(trRaw, 'trailer');
+
+  setFieldError('#in-tractor', '#err-tractor', tRaw && !tOk
+    ? 'Номер не найден в автопарке' : '');
+  setFieldError('#in-trailer', '#err-trailer', trRaw && !trOk
+    ? 'Номер не найден в автопарке' : '');
+
+  $('#btn-next').disabled = !(tOk && trOk);
+}
+
+/** Показывает/снимает ошибку у поля. */
+function setFieldError(inputSel, errSel, message) {
+  const err = $(errSel);
+  const plate = $(inputSel).closest('.plate');
+  if (message) {
+    err.textContent = message; err.hidden = false;
+    if (plate) plate.classList.add('bad');
+  } else {
+    err.hidden = true;
+    if (plate) plate.classList.remove('bad');
+  }
 }
 function validateRating() {
   const ok = state.service && state.rating !== null && state.comment.trim();

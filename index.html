@@ -60,6 +60,12 @@
   }
   .req{color:var(--red)}
   .hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+  .err{font-size:12px;color:var(--red);margin:6px 0 0;font-weight:500}
+  .banner{font-size:13px;line-height:1.5;color:var(--red-deep);background:#FDEBEC;
+          border:1px solid #F5C4C8;border-radius:10px;padding:11px 13px;margin-bottom:20px}
+  .input:disabled{background:#F2F3F4;cursor:not-allowed}
+  .plate:has(.input:disabled){background:#F2F3F4;opacity:.7}
+  .plate.bad{border-color:var(--red)}
 
   .ac{position:relative;margin-bottom:20px}
   .plate{display:flex;align-items:stretch;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
@@ -156,6 +162,7 @@
     <section class="view active" id="view-auth">
       <div class="welcome">Добро пожаловать</div>
       <p class="lead">Укажите номера вашего транспортного средства для входа.</p>
+      <p class="banner" id="fleet-status" hidden></p>
 
       <div class="ac">
         <div class="field-label">Номер тягача <span class="req">*</span></div>
@@ -163,9 +170,10 @@
           <span class="flag">BY</span>
           <input class="input" id="in-tractor" autocomplete="off" inputmode="text"
                  role="combobox" aria-autocomplete="list" aria-expanded="false"
-                 placeholder="Начните ввод">
+                 placeholder="Введите номер">
         </div>
         <ul class="aclist" id="list-tractor" role="listbox" hidden></ul>
+        <p class="err" id="err-tractor" role="alert" hidden></p>
       </div>
 
       <div class="ac">
@@ -174,10 +182,11 @@
           <span class="flag">BY</span>
           <input class="input" id="in-trailer" autocomplete="off" inputmode="text"
                  role="combobox" aria-autocomplete="list" aria-expanded="false"
-                 placeholder="Если есть">
+                 placeholder="Введите номер, если есть">
         </div>
         <ul class="aclist" id="list-trailer" role="listbox" hidden></ul>
-        <p class="hint">Выберите номер из списка автопарка.</p>
+        <p class="err" id="err-trailer" role="alert" hidden></p>
+        <p class="hint">Начните вводить номер — появятся подсказки из автопарка.</p>
       </div>
 
       <div class="spacer"></div>
