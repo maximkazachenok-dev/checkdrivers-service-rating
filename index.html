@@ -9,13 +9,13 @@
 <meta name="apple-mobile-web-app-title" content="PRIMUM">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>PRIMUM — Оценка автосервисов</title>
+<title>PRIMUM</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
   :root{
     --graphite:#42484F; --graphite-deep:#2C3136; --ink:#1A1D20;
     --red:#D6303F; --red-deep:#A5202B; --paper:#F4F5F6; --line:#E1E3E5;
-    --muted:#8A8F94; --white:#FFFFFF; --radius:20px;
+    --muted:#8A8F94; --white:#FFFFFF;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
@@ -24,50 +24,63 @@
     background:linear-gradient(180deg,#33383e 0%, #23272b 100%);
     -webkit-font-smoothing:antialiased; overscroll-behavior:none;
   }
-  .app{
-    max-width:480px; margin:0 auto; min-height:100dvh;
-    display:flex; flex-direction:column; background:var(--paper);
-    position:relative;
-  }
+  .app{max-width:480px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;background:var(--paper)}
 
-  /* header */
+  /* ---------- header ---------- */
   .app-head{
     background:var(--graphite-deep); color:#fff;
     padding:calc(env(safe-area-inset-top) + 18px) 22px 18px;
-    display:flex; align-items:center; gap:14px;
+    display:flex; align-items:center; gap:12px;
   }
   .app-head img.logo{height:22px;width:auto;display:block}
   .app-head .sub{
-    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
-    color:rgba(255,255,255,.55); padding-left:14px; border-left:1px solid rgba(255,255,255,.18);
+    font-size:11px; letter-spacing:.2em; text-transform:uppercase;
+    color:rgba(255,255,255,.55); padding-left:12px; border-left:1px solid rgba(255,255,255,.18);
+  }
+  .backbtn{
+    border:0;background:rgba(255,255,255,.1);color:#fff;width:30px;height:30px;
+    border-radius:9px;font-size:17px;line-height:1;cursor:pointer;flex-shrink:0;
   }
   #pending{
-    margin-left:auto; font-size:11px; font-weight:600; color:#fff;
-    background:var(--red-deep); padding:5px 11px; border-radius:100px;
+    margin-left:auto;font-size:11px;font-weight:600;color:#fff;
+    background:var(--red-deep);padding:5px 11px;border-radius:100px;flex-shrink:0;
   }
 
-  /* views */
-  .body{flex:1; display:flex; flex-direction:column; padding:26px 22px 20px}
-  .view{display:none; flex-direction:column; flex:1}
+  /* ---------- views ---------- */
+  .body{flex:1;display:flex;flex-direction:column;padding:26px 22px 20px}
+  .view{display:none;flex-direction:column;flex:1}
   .view.active{display:flex}
+  .view.center{justify-content:center}
 
-  .welcome{font-family:'Oswald';font-size:22px;color:var(--graphite-deep);margin-bottom:4px}
-  .lead{font-size:14px;line-height:1.55;color:#5b6167;margin-bottom:26px}
+  .h1{font-family:'Oswald';font-size:22px;color:var(--graphite-deep);margin-bottom:4px}
+  .lead{font-size:14px;line-height:1.55;color:#5b6167;margin-bottom:24px}
 
   .field-label{
-    font-size:12px; font-weight:600; letter-spacing:.02em; color:var(--graphite);
-    text-transform:uppercase; margin:0 0 8px;
+    font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--graphite);
+    text-transform:uppercase;margin:0 0 8px;
   }
   .req{color:var(--red)}
   .hint{font-size:12px;color:var(--muted);margin:6px 0 0}
   .err{font-size:12px;color:var(--red);margin:6px 0 0;font-weight:500}
-  .banner{font-size:13px;line-height:1.5;color:var(--red-deep);background:#FDEBEC;
-          border:1px solid #F5C4C8;border-radius:10px;padding:11px 13px;margin-bottom:20px}
-  .input:disabled{background:#F2F3F4;cursor:not-allowed}
-  .plate:has(.input:disabled){background:#F2F3F4;opacity:.7}
-  .plate.bad{border-color:var(--red)}
+  .banner{
+    font-size:13px;line-height:1.5;color:var(--red-deep);background:#FDEBEC;
+    border:1px solid #F5C4C8;border-radius:10px;padding:11px 13px;margin-bottom:20px;
+  }
 
-  .ac{position:relative;margin-bottom:20px}
+  /* ---------- inputs ---------- */
+  .ac{position:relative;margin-bottom:18px}
+  .tf,.pwd{border:1.5px solid var(--line);border-radius:12px;background:#fff;display:flex;align-items:stretch}
+  .tf:focus-within,.pwd:focus-within{border-color:var(--graphite)}
+  .tf.bad,.pwd.bad,.plate.bad{border-color:var(--red)}
+  .tf input,.pwd input{
+    flex:1;border:0;outline:0;padding:14px;font-family:'Inter';font-size:15px;
+    color:var(--ink);background:transparent;min-width:0;
+  }
+  .pwd button{
+    border:0;background:transparent;padding:0 14px;color:var(--muted);
+    font-size:11px;font-family:'Inter';font-weight:600;cursor:pointer;text-transform:uppercase;
+    letter-spacing:.04em;
+  }
   .plate{display:flex;align-items:stretch;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
   .plate:focus-within{border-color:var(--graphite)}
   .flag{
@@ -75,20 +88,23 @@
     background:var(--graphite-deep);color:#fff;font-family:'Oswald';font-size:13px;letter-spacing:.05em;
   }
   .input{
-    flex:1;border:0;outline:0;padding:14px 14px;font-family:'Oswald';font-size:17px;
+    flex:1;border:0;outline:0;padding:14px;font-family:'Oswald';font-size:17px;
     letter-spacing:.03em;color:var(--ink);background:transparent;min-width:0;
   }
+  .input:disabled,.tf input:disabled{background:#F2F3F4;cursor:not-allowed}
+
   .aclist{
     list-style:none;position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
     background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;
-    box-shadow:0 18px 40px -20px rgba(26,29,32,.4);max-height:260px;overflow-y:auto;
+    box-shadow:0 18px 40px -20px rgba(26,29,32,.4);max-height:250px;overflow-y:auto;
   }
   .aclist li{
-    padding:12px 14px;font-family:'Oswald';font-size:16px;letter-spacing:.03em;color:var(--ink);
-    cursor:pointer;border-bottom:1px solid var(--paper);
+    padding:12px 14px;font-family:'Oswald';font-size:16px;letter-spacing:.03em;
+    color:var(--ink);cursor:pointer;border-bottom:1px solid var(--paper);
   }
   .aclist li:last-child{border-bottom:0}
   .aclist li.on,.aclist li:hover{background:var(--paper);color:var(--red-deep)}
+  .aclist.names li{font-family:'Inter';font-size:14px;letter-spacing:0}
 
   .select{
     width:100%;border:1.5px solid var(--line);border-radius:12px;background:#fff;
@@ -98,8 +114,37 @@
     background-repeat:no-repeat;background-position:right 16px center;
   }
   .select:focus{outline:0;border-color:var(--graphite)}
-  .select:invalid{color:var(--muted)}
 
+  /* ---------- home tiles ---------- */
+  .home-greet{font-family:'Oswald';font-size:21px;color:var(--graphite-deep);line-height:1.2}
+  .home-sub{font-size:13px;color:var(--muted);margin:4px 0 24px}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tile{
+    position:relative;background:#fff;border:1.5px solid var(--line);border-radius:16px;
+    padding:16px 14px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;
+    min-height:134px;text-align:left;cursor:pointer;transition:transform .12s, box-shadow .15s;
+  }
+  .tile:active{transform:scale(.975)}
+  .tile-ic{
+    width:40px;height:40px;border-radius:11px;background:var(--paper);
+    display:flex;align-items:center;justify-content:center;color:var(--red);flex-shrink:0;
+  }
+  .tile-ic svg{width:22px;height:22px}
+  .tile-t{
+    font-family:'Oswald';font-size:14px;line-height:1.3;color:var(--graphite-deep);
+    letter-spacing:.01em;font-weight:500;
+  }
+  .tile.primary{background:var(--graphite-deep);border-color:var(--graphite-deep);
+    box-shadow:0 14px 30px -18px rgba(26,29,32,.55)}
+  .tile.primary .tile-t{color:#fff}
+  .tile.primary .tile-ic{background:rgba(255,255,255,.1)}
+  .soon{
+    position:absolute;top:11px;right:11px;font-size:9px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted);background:var(--paper);
+    padding:3px 7px;border-radius:100px;font-weight:600;
+  }
+
+  /* ---------- rating ---------- */
   .rating-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px}
   .rating-val{font-family:'Oswald';font-size:34px;font-weight:600;color:var(--red);line-height:1}
   .rating-val small{font-size:15px;color:var(--muted);font-weight:400}
@@ -111,15 +156,15 @@
   }
   .dot.on{background:var(--graphite);border-color:var(--graphite);color:#fff}
   .dot.pick{background:var(--red);border-color:var(--red);color:#fff;transform:scale(1.08)}
-  .scale-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:24px}
-
+  .scale-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:22px}
   .textarea{
-    width:100%;min-height:96px;border:1.5px solid var(--line);border-radius:12px;
+    width:100%;min-height:92px;border:1.5px solid var(--line);border-radius:12px;
     padding:13px 14px;font-family:'Inter';font-size:14px;line-height:1.5;color:var(--ink);
     resize:vertical;background:#fff;margin-bottom:8px;
   }
   .textarea:focus{outline:0;border-color:var(--graphite)}
 
+  /* ---------- buttons ---------- */
   .spacer{flex:1;min-height:14px}
   .btn{
     width:100%;border:0;border-radius:14px;padding:16px;font-family:'Oswald';
@@ -129,9 +174,13 @@
   .btn-primary:hover{background:var(--red-deep)}
   .btn-primary:disabled{background:#cfd2d5;color:#fff;cursor:not-allowed}
   .btn-ghost{background:transparent;color:var(--graphite);border:1.5px solid var(--line);margin-bottom:10px}
+  .btn-text{
+    background:transparent;border:0;color:var(--muted);font-family:'Inter';font-size:13px;
+    padding:14px;cursor:pointer;width:100%;
+  }
   .fine{font-size:12px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.5}
 
-  /* thanks */
+  /* ---------- thanks ---------- */
   #view-thanks{align-items:center;justify-content:center;text-align:center}
   .check{
     width:76px;height:76px;border-radius:50%;background:#fff;border:2px solid var(--red);
@@ -139,9 +188,8 @@
   }
   .check svg{width:38px;height:38px}
   .thx-h{font-family:'Oswald';font-size:26px;color:var(--graphite-deep);line-height:1.1;margin-bottom:12px}
-  #thanks-note{font-size:14px;line-height:1.6;color:#5b6167;max-width:32ch;margin-bottom:30px}
+  #thanks-note{font-size:14px;line-height:1.6;color:#5b6167;max-width:32ch;margin-bottom:28px}
 
-  /* footer dots */
   .navdots{display:flex;gap:7px;justify-content:center;padding:16px 0 calc(env(safe-area-inset-bottom) + 16px)}
   .navdots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block}
   .navdots i.on{background:var(--red);width:20px;border-radius:100px}
@@ -152,25 +200,114 @@
 <body>
 <div class="app">
   <div class="app-head">
+    <button class="backbtn" id="btn-head-back" aria-label="Назад" hidden>&#8592;</button>
     <img class="logo" src="data:image/png;base64,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" alt="PRIMUM">
-    <span class="sub">Оценка автосервисов</span>
+    <span class="sub" id="head-sub">Вход</span>
     <span id="pending" hidden></span>
   </div>
 
   <div class="body">
-    <!-- ЭКРАН 1: авторизация -->
-    <section class="view active" id="view-auth">
-      <div class="welcome">Добро пожаловать</div>
-      <p class="lead">Укажите номера вашего транспортного средства для входа.</p>
+
+    <!-- ЭКРАН: вход -->
+    <section class="view active" id="view-login">
+      <div class="h1">Вход в систему</div>
+      <p class="lead">Введите фамилию и выберите себя из списка, затем укажите пароль.</p>
+      <p class="banner" id="boot-status" hidden></p>
+
+      <div class="ac">
+        <div class="field-label">ФИО <span class="req">*</span></div>
+        <div class="tf">
+          <input id="in-fio" autocomplete="off" role="combobox" aria-autocomplete="list"
+                 aria-expanded="false" placeholder="Начните вводить фамилию">
+        </div>
+        <ul class="aclist names" id="list-fio" role="listbox" hidden></ul>
+      </div>
+
+      <div class="ac">
+        <div class="field-label">Пароль <span class="req">*</span></div>
+        <div class="pwd" id="wrap-pwd">
+          <input id="in-pwd" type="password" autocomplete="current-password" placeholder="Введите пароль">
+          <button type="button" id="btn-eye">Показать</button>
+        </div>
+        <p class="err" id="err-login" role="alert" hidden></p>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="btn-login" disabled>Войти</button>
+      <p class="fine">Доступ только для сотрудников PRIMUM.</p>
+    </section>
+
+    <!-- ЭКРАН: главная -->
+    <section class="view" id="view-home">
+      <div class="spacer"></div>
+      <div class="home-greet" id="greet">Здравствуйте</div>
+      <p class="home-sub">Выберите раздел</p>
+
+      <div class="tiles">
+        <button class="tile primary" id="tile-rating">
+          <span class="tile-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.7 6.3a4 4 0 0 0 5 5L21 21H3l7-9a4 4 0 0 1 4.7-5.7z"/>
+              <path d="M14.7 6.3 18 3l3 3-3.3 3.3"/>
+            </svg>
+          </span>
+          <span class="tile-t">Оценка качества ремонта</span>
+        </button>
+
+        <button class="tile" id="tile-inbox">
+          <span class="soon">Скоро</span>
+          <span class="tile-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 13h4l1.5 3h7L17 13h4"/>
+              <path d="M5 6h14l2 7v6H3v-6l2-7z"/>
+            </svg>
+          </span>
+          <span class="tile-t">Ящик обращений</span>
+        </button>
+
+        <button class="tile" id="tile-eco">
+          <span class="soon">Скоро</span>
+          <span class="tile-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 20A7 7 0 0 1 11 6h9v5a9 9 0 0 1-9 9z"/>
+              <path d="M4 21c2-6 6-9 12-11"/>
+            </svg>
+          </span>
+          <span class="tile-t">Советы по эко-вождению</span>
+        </button>
+
+        <button class="tile" id="tile-newbie">
+          <span class="soon">Скоро</span>
+          <span class="tile-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H12v16H5.5A2.5 2.5 0 0 0 3 22V6.5z"/>
+              <path d="M21 6.5A2.5 2.5 0 0 0 18.5 4H12v16h6.5a2.5 2.5 0 0 1 2.5 2V6.5z"/>
+            </svg>
+          </span>
+          <span class="tile-t">Новым сотрудникам</span>
+        </button>
+      </div>
+
+      <div class="spacer"></div>
+      <button class="btn-text" id="btn-logout">Выйти из аккаунта</button>
+    </section>
+
+    <!-- ЭКРАН: ТС (шаг 1 опроса) -->
+    <section class="view" id="view-vehicle">
+      <div class="h1">Транспортное средство</div>
+      <p class="lead">Укажите номера, на которых выполнялся ремонт.</p>
       <p class="banner" id="fleet-status" hidden></p>
 
       <div class="ac">
         <div class="field-label">Номер тягача <span class="req">*</span></div>
         <div class="plate">
           <span class="flag">BY</span>
-          <input class="input" id="in-tractor" autocomplete="off" inputmode="text"
-                 role="combobox" aria-autocomplete="list" aria-expanded="false"
-                 placeholder="Введите номер">
+          <input class="input" id="in-tractor" autocomplete="off" role="combobox"
+                 aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
         </div>
         <ul class="aclist" id="list-tractor" role="listbox" hidden></ul>
         <p class="err" id="err-tractor" role="alert" hidden></p>
@@ -180,9 +317,8 @@
         <div class="field-label">Номер прицепа</div>
         <div class="plate">
           <span class="flag">BY</span>
-          <input class="input" id="in-trailer" autocomplete="off" inputmode="text"
-                 role="combobox" aria-autocomplete="list" aria-expanded="false"
-                 placeholder="Введите номер, если есть">
+          <input class="input" id="in-trailer" autocomplete="off" role="combobox"
+                 aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер, если есть">
         </div>
         <ul class="aclist" id="list-trailer" role="listbox" hidden></ul>
         <p class="err" id="err-trailer" role="alert" hidden></p>
@@ -190,11 +326,10 @@
       </div>
 
       <div class="spacer"></div>
-      <button class="btn btn-primary" id="btn-next" disabled>Далее →</button>
-      <p class="fine">Нажимая «Далее», вы подтверждаете корректность данных.</p>
+      <button class="btn btn-primary" id="btn-next" disabled>Далее &#8594;</button>
     </section>
 
-    <!-- ЭКРАН 2: оценка -->
+    <!-- ЭКРАН: оценка (шаг 2 опроса) -->
     <section class="view" id="view-rating">
       <div class="field-label">Автосервис <span class="req">*</span></div>
       <select class="select" id="in-service" required>
@@ -203,31 +338,34 @@
 
       <div class="rating-head">
         <div class="field-label" style="margin:0">Оцените качество ремонта <span class="req">*</span></div>
-        <div class="rating-val" id="rating-val">—<small>/10</small></div>
+        <div class="rating-val" id="rating-val">&#8212;<small>/10</small></div>
       </div>
       <div class="scale" id="scale"></div>
       <div class="scale-legend"><span>Плохо</span><span>Отлично</span></div>
 
       <div class="field-label">Комментарий <span class="req">*</span></div>
-      <textarea class="textarea" id="in-comment" placeholder="Опишите, что было выполнено, и что осталось не так"></textarea>
+      <textarea class="textarea" id="in-comment"
+                placeholder="Опишите, что было выполнено, и что осталось не так"></textarea>
 
       <div class="spacer"></div>
-      <button class="btn btn-ghost" id="btn-back">← Назад</button>
+      <button class="btn btn-ghost" id="btn-back">&#8592; Назад</button>
       <button class="btn btn-primary" id="btn-submit" disabled>Отправить</button>
     </section>
 
-    <!-- ЭКРАН 3: спасибо -->
+    <!-- ЭКРАН: спасибо -->
     <section class="view" id="view-thanks">
       <div class="check">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5 11-11" stroke="#D6303F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5 11-11" stroke="#D6303F"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <div class="thx-h">Спасибо<br>за ваш отзыв!</div>
       <p id="thanks-note">Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.</p>
-      <button class="btn btn-primary" id="btn-home" style="max-width:220px">← На главную</button>
+      <button class="btn btn-primary" id="btn-home" style="max-width:220px">&#8592; На главную</button>
     </section>
+
   </div>
 
-  <div class="navdots"><i class="on"></i><i></i><i></i></div>
+  <div class="navdots" id="navdots" hidden><i></i><i></i><i></i></div>
 </div>
 <script src="./app.js"></script>
 </body>
