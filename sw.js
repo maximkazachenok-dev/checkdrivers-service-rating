@@ -1,12 +1,19 @@
 /* PRIMUM service worker — офлайн-оболочка + фоновая досылка ответов. */
-const CACHE = 'primum-shell-v7';
+const CACHE = 'primum-shell-v8';
 const SHELL = [
   './',
   './index.html',
   './app.js',
+  './content.js',
   './manifest.webmanifest',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  // материалы раздела «Советы по эко-вождению» — должны быть доступны офлайн
+  './eco-what-1.webp',
+  './eco-what-2.webp',
+  './eco-what-3.webp',
+  './eco-what-4.webp',
+  './eco-tips.webp'
 ];
 
 self.addEventListener('install', (e) => {

@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#2C3136">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -190,6 +190,76 @@
   .thx-h{font-family:'Oswald';font-size:26px;color:var(--graphite-deep);line-height:1.1;margin-bottom:12px}
   #thanks-note{font-size:14px;line-height:1.6;color:#5b6167;max-width:32ch;margin-bottom:28px}
 
+  /* ---------- меню раздела ---------- */
+  .menu{display:flex;flex-direction:column;gap:11px}
+  .mrow{
+    display:flex;align-items:center;gap:14px;background:#fff;border:1.5px solid var(--line);
+    border-radius:14px;padding:15px 16px;cursor:pointer;text-align:left;width:100%;
+    transition:transform .12s;
+  }
+  .mrow:active{transform:scale(.985)}
+  .mrow-ic{
+    width:38px;height:38px;border-radius:10px;background:var(--paper);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;color:var(--red);
+  }
+  .mrow-ic svg{width:20px;height:20px}
+  .mrow-txt{flex:1;min-width:0}
+  .mrow-t{font-family:'Oswald';font-size:15px;font-weight:500;color:var(--graphite-deep);line-height:1.25}
+  .mrow-s{font-size:12px;color:var(--muted);margin-top:2px}
+  .mrow-arrow{color:var(--muted);font-size:16px;flex-shrink:0}
+
+  /* ---------- карусель ---------- */
+  .carousel{
+    display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;
+  }
+  .carousel::-webkit-scrollbar{display:none}
+  .cslide{flex:0 0 100%;scroll-snap-align:center;min-width:0}
+  .cslide img{
+    width:100%;height:auto;display:block;border-radius:14px;
+    border:1px solid var(--line);background:#fff;cursor:zoom-in;
+  }
+  .tcard{
+    background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:19px 17px;
+  }
+  .tnum{
+    display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;
+    border-radius:8px;background:var(--red);color:#fff;font-family:'Oswald';font-size:14px;
+    margin-bottom:11px;padding:0 7px;
+  }
+  .ttitle{font-family:'Oswald';font-size:17px;line-height:1.25;color:var(--graphite-deep);margin-bottom:13px}
+  .tlist{list-style:none;display:flex;flex-direction:column;gap:11px}
+  .tlist li{
+    font-size:13.5px;line-height:1.55;color:#42484F;padding-left:14px;position:relative;
+  }
+  .tlist li:before{
+    content:'';position:absolute;left:0;top:8px;width:5px;height:5px;
+    border-radius:50%;background:var(--red);
+  }
+  .cr-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}
+  .cr-nav{
+    width:46px;height:46px;border-radius:13px;border:1.5px solid var(--line);background:#fff;
+    color:var(--graphite);font-size:19px;cursor:pointer;flex-shrink:0;
+  }
+  .cr-nav:disabled{opacity:.35;cursor:not-allowed}
+  .cr-count{font-family:'Oswald';font-size:14px;color:var(--muted);letter-spacing:.06em}
+  .cr-hint{font-size:11.5px;color:var(--muted);text-align:center;margin-top:10px}
+
+  /* ---------- полноэкранный просмотр ---------- */
+  .zoom{position:fixed;inset:0;z-index:120;background:rgba(26,29,32,.97);display:flex;flex-direction:column}
+  .zoom[hidden]{display:none}
+  .zoom-top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;color:#fff;flex-shrink:0;
+  }
+  .zoom-hint{font-size:11.5px;color:rgba(255,255,255,.6)}
+  .zoom-close{
+    border:0;background:rgba(255,255,255,.14);color:#fff;width:34px;height:34px;
+    border-radius:10px;font-size:16px;cursor:pointer;flex-shrink:0;
+  }
+  .zoom-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:0 0 env(safe-area-inset-bottom)}
+  .zoom-scroll img{max-width:none;height:auto;display:block}
+
   .navdots{display:flex;gap:7px;justify-content:center;padding:16px 0 calc(env(safe-area-inset-bottom) + 16px)}
   .navdots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block}
   .navdots i.on{background:var(--red);width:20px;border-radius:100px}
@@ -267,7 +337,6 @@
         </button>
 
         <button class="tile" id="tile-eco">
-          <span class="soon">Скоро</span>
           <span class="tile-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" stroke-linejoin="round">
@@ -351,6 +420,82 @@
       <button class="btn btn-primary" id="btn-submit" disabled>Отправить</button>
     </section>
 
+    <!-- ЭКРАН: меню раздела эко-вождения -->
+    <section class="view" id="view-eco">
+      <div class="h1">Советы по эко-вождению</div>
+      <p class="lead">Материалы программы PRIMUM ECO DRIVER.</p>
+
+      <div class="menu">
+        <button class="mrow" id="eco-what">
+          <span class="mrow-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/>
+            </svg>
+          </span>
+          <span class="mrow-txt">
+            <span class="mrow-t">Что такое экодрайвинг</span>
+            <span class="mrow-s" id="eco-what-sub">4 слайда</span>
+          </span>
+          <span class="mrow-arrow">&#8594;</span>
+        </button>
+
+        <button class="mrow" id="eco-tips">
+          <span class="mrow-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 20A7 7 0 0 1 11 6h9v5a9 9 0 0 1-9 9z"/><path d="M4 21c2-6 6-9 12-11"/>
+            </svg>
+          </span>
+          <span class="mrow-txt">
+            <span class="mrow-t">Общие советы</span>
+            <span class="mrow-s" id="eco-tips-sub">Схема-инструкция</span>
+          </span>
+          <span class="mrow-arrow">&#8594;</span>
+        </button>
+
+        <button class="mrow" id="eco-instruction">
+          <span class="mrow-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 4h11l3 3v13H5z"/><path d="M9 10h7M9 14h7"/>
+            </svg>
+          </span>
+          <span class="mrow-txt">
+            <span class="mrow-t">Инструкция по экономичному вождению</span>
+            <span class="mrow-s" id="eco-instruction-sub">10 разделов</span>
+          </span>
+          <span class="mrow-arrow">&#8594;</span>
+        </button>
+      </div>
+
+      <div class="spacer"></div>
+    </section>
+
+    <!-- ЭКРАН: карусель изображений -->
+    <section class="view" id="view-eco-media">
+      <div class="carousel" id="media-track"></div>
+      <div class="cr-bar">
+        <button class="cr-nav" id="media-prev" aria-label="Назад">&#8592;</button>
+        <span class="cr-count" id="media-count">1 / 1</span>
+        <button class="cr-nav" id="media-next" aria-label="Вперёд">&#8594;</button>
+      </div>
+      <p class="cr-hint">Листайте влево и вправо. Нажмите на изображение, чтобы увеличить.</p>
+      <div class="spacer"></div>
+    </section>
+
+    <!-- ЭКРАН: текстовая карусель -->
+    <section class="view" id="view-eco-text">
+      <div class="carousel" id="text-track"></div>
+      <div class="cr-bar">
+        <button class="cr-nav" id="text-prev" aria-label="Назад">&#8592;</button>
+        <span class="cr-count" id="text-count">1 / 1</span>
+        <button class="cr-nav" id="text-next" aria-label="Вперёд">&#8594;</button>
+      </div>
+      <p class="cr-hint">Листайте влево и вправо.</p>
+      <div class="spacer"></div>
+    </section>
+
     <!-- ЭКРАН: ящик обращений -->
     <section class="view" id="view-appeal">
       <div class="h1">Ящик обращений</div>
@@ -412,7 +557,16 @@
   </div>
 
   <div class="navdots" id="navdots" hidden><i></i><i></i><i></i></div>
+
+  <div class="zoom" id="zoom" hidden>
+    <div class="zoom-top">
+      <span class="zoom-hint">Двумя пальцами можно приблизить</span>
+      <button class="zoom-close" id="zoom-close" aria-label="Закрыть">&#10005;</button>
+    </div>
+    <div class="zoom-scroll" id="zoom-scroll"><img id="zoom-img" alt=""></div>
+  </div>
 </div>
+<script src="./content.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

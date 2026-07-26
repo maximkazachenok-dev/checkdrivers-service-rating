@@ -2,9 +2,9 @@
  * Настройка: API_URL (URL веб-приложения Apps Script) и тот же SHARED_TOKEN, что в Code.gs. */
 
 const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.1.0',
+  APP_VERSION: '2.2.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -103,6 +103,9 @@ const SCREENS = {
   'view-login':   { sub: 'Вход',            back: null,           dots: 0 },
   'view-home':    { sub: 'Главная',         back: null,           dots: 0 },
   'view-appeal':  { sub: 'Ящик обращений',  back: 'view-home',    dots: 0 },
+  'view-eco':     { sub: 'Эко-вождение',    back: 'view-home',    dots: 0 },
+  'view-eco-media': { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
+  'view-eco-text':  { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
   'view-vehicle': { sub: 'Оценка ремонта',  back: 'view-home',    dots: 1 },
   'view-rating':  { sub: 'Оценка ремонта',  back: 'view-vehicle', dots: 2 },
   'view-thanks':  { sub: 'Оценка ремонта',  back: null,           dots: 3 }
@@ -573,6 +576,124 @@ async function submit() {
   updatePending();
 }
 
+/* ---------- Карусели ---------- */
+
+/**
+ * Горизонтальная карусель на CSS scroll-snap: свайп работает нативно,
+ * JS нужен только для счётчика и кнопок.
+ */
+function setupCarousel(trackSel, prevSel, nextSel, countSel) {
+  const track = $(trackSel);
+  const prev = $(prevSel), next = $(nextSel), count = $(countSel);
+  let timer = null;
+  let idx = 0;   // текущий/целевой слайд
+
+  function total() { return track.children.length; }
+  function paint() {
+    const n = total();
+    if (!n) { count.textContent = '0 / 0'; prev.disabled = next.disabled = true; return; }
+    count.textContent = (idx + 1) + ' / ' + n;
+    prev.disabled = idx <= 0;
+    next.disabled = idx >= n - 1;
+  }
+  /** Переход к слайду по номеру — считаем от целевого индекса, а не от
+   *  текущей позиции прокрутки, иначе быстрые нажатия пропускают слайды. */
+  function show(i) {
+    const n = total();
+    idx = Math.max(0, Math.min(i, n - 1));
+    track.scrollTo({ left: idx * track.clientWidth, behavior: 'smooth' });
+    paint();
+  }
+  // Свайп пальцем: подхватываем позицию после остановки прокрутки.
+  track.addEventListener('scroll', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const w = track.clientWidth || 1;
+      idx = Math.max(0, Math.min(Math.round(track.scrollLeft / w), total() - 1));
+      paint();
+    }, 90);
+  });
+  prev.addEventListener('click', () => show(idx - 1));
+  next.addEventListener('click', () => show(idx + 1));
+
+  return {
+    update: paint,
+    reset: function () { idx = 0; track.scrollLeft = 0; paint(); }
+  };
+}
+
+let carMedia = null, carText = null;
+
+/* ---------- Раздел «Советы по эко-вождению» ---------- */
+
+function openEcoMenu() {
+  const c = window.ECO_CONTENT || {};
+  if (c.what) $('#eco-what-sub').textContent = c.what.subtitle || '';
+  if (c.tips) $('#eco-tips-sub').textContent = c.tips.subtitle || '';
+  if (c.instruction) $('#eco-instruction-sub').textContent = c.instruction.subtitle || '';
+  goTo('view-eco');
+}
+
+/** Карусель изображений: используется и для «Что такое экодрайвинг», и для «Общих советов». */
+function openEcoMedia(key) {
+  const item = (window.ECO_CONTENT || {})[key];
+  if (!item || !item.images) return;
+  const track = $('#media-track');
+  track.innerHTML = item.images.map(function (src, i) {
+    return '<div class="cslide"><img src="' + src + '" alt="' +
+           item.title + ', слайд ' + (i + 1) + '" loading="' +
+           (i === 0 ? 'eager' : 'lazy') + '"></div>';
+  }).join('');
+  SCREENS['view-eco-media'].sub = item.title;
+  goTo('view-eco-media');
+  carMedia.reset();
+}
+
+/** Текстовая карусель инструкции. */
+function openEcoText() {
+  const item = (window.ECO_CONTENT || {}).instruction;
+  if (!item || !item.slides) return;
+  const track = $('#text-track');
+  track.innerHTML = item.slides.map(function (sl, i) {
+    const items = sl.items.map(function (t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('');
+    return '<div class="cslide"><div class="tcard">' +
+           '<span class="tnum">' + (i + 1) + ' / ' + item.slides.length + '</span>' +
+           '<div class="ttitle">' + escapeHtml(sl.title) + '</div>' +
+           '<ul class="tlist">' + items + '</ul></div></div>';
+  }).join('');
+  SCREENS['view-eco-text'].sub = item.title;
+  goTo('view-eco-text');
+  carText.reset();
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ---------- Полноэкранный просмотр изображения ---------- */
+
+function openZoom(src, alt) {
+  const img = $('#zoom-img');
+  img.src = src;
+  img.alt = alt || '';
+  // Ширину подбираем по пропорциям: широкую схему нужно приближать сильнее.
+  img.onload = function () {
+    const wide = img.naturalWidth > img.naturalHeight;
+    img.style.width = wide ? '300%' : '170%';
+    const box = $('#zoom-scroll');
+    // Начинаем с левого верхнего угла, чтобы было видно начало схемы.
+    box.scrollLeft = 0; box.scrollTop = 0;
+  };
+  $('#zoom').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeZoom() {
+  $('#zoom').hidden = true;
+  $('#zoom-img').removeAttribute('src');
+  document.body.style.overflow = '';
+}
+
 /* ---------- Обращение: отправка ---------- */
 
 async function submitAppeal() {
@@ -696,9 +817,23 @@ async function init() {
   // главная
   $('#tile-rating').addEventListener('click', startSurvey);
   $('#tile-inbox').addEventListener('click', startAppeal);
-  // Разделы в разработке: нажатие пока не выполняет переход.
-  ['#tile-eco', '#tile-newbie'].forEach((sel2) => {
-    $(sel2).addEventListener('click', () => {});
+  $('#tile-eco').addEventListener('click', openEcoMenu);
+  // Раздел в разработке: нажатие пока не выполняет переход.
+  $('#tile-newbie').addEventListener('click', () => {});
+
+  // эко-вождение
+  carMedia = setupCarousel('#media-track', '#media-prev', '#media-next', '#media-count');
+  carText  = setupCarousel('#text-track', '#text-prev', '#text-next', '#text-count');
+  $('#eco-what').addEventListener('click', () => openEcoMedia('what'));
+  $('#eco-tips').addEventListener('click', () => openEcoMedia('tips'));
+  $('#eco-instruction').addEventListener('click', openEcoText);
+  $('#media-track').addEventListener('click', (e) => {
+    const img = e.target.closest('img');
+    if (img) openZoom(img.src, img.alt);
+  });
+  $('#zoom-close').addEventListener('click', closeZoom);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#zoom').hidden) closeZoom();
   });
 
   // форма обращения
@@ -723,6 +858,7 @@ async function init() {
   $('#btn-submit').addEventListener('click', submit);
   $('#btn-home').addEventListener('click', () => goTo('view-home'));
   $('#btn-head-back').addEventListener('click', (e) => {
+    if (!$('#zoom').hidden) { closeZoom(); return; }
     const t = e.currentTarget.dataset.target;
     if (t) goTo(t);
   });
