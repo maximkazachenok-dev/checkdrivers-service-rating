@@ -85,6 +85,51 @@ const state = {
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+/* Элементы, которых не оказалось в разметке. Заполняется при инициализации:
+   если index.html и app.js разных версий, приложение обязано сообщить об этом,
+   а не молча перестать работать. */
+const missingEls = [];
+
+/** Привязка обработчика, устойчивая к отсутствию элемента. */
+function on(sel, event, handler) {
+  const node = $(sel);
+  if (!node) { missingEls.push(sel); return false; }
+  node.addEventListener(event, handler);
+  return true;
+}
+
+/** Сообщение о рассинхроне версий файлов + кнопка полного сброса. */
+function showVersionWarning() {
+  if (document.getElementById('ver-warn')) return;
+  const bar = document.createElement('div');
+  bar.id = 'ver-warn';
+  bar.style.cssText =
+    'position:fixed;left:0;right:0;bottom:0;z-index:200;background:#A5202B;color:#fff;' +
+    'font-family:Inter,sans-serif;font-size:13px;line-height:1.45;padding:13px 16px;' +
+    'display:flex;gap:12px;align-items:center;justify-content:space-between';
+  bar.innerHTML =
+    '<span>Файлы приложения разных версий. Нужно обновить.</span>' +
+    '<button id="ver-fix" style="border:0;background:#fff;color:#A5202B;font-weight:600;' +
+    'padding:8px 14px;border-radius:8px;cursor:pointer;flex-shrink:0">Обновить</button>';
+  document.body.appendChild(bar);
+  const btn = document.getElementById('ver-fix');
+  if (btn) btn.addEventListener('click', hardReset);
+}
+
+/** Снимает service worker, чистит кэш и хранилище, перезагружает. */
+async function hardReset() {
+  try {
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    const keys = await caches.keys();
+    for (const k of keys) await caches.delete(k);
+    indexedDB.deleteDatabase(DB_NAME);
+  } catch (e) { /* всё равно перезагружаем */ }
+  setTimeout(() => location.reload(true), 500);
+}
+
 /* ---------- Нормализация ---------- */
 const CYR_TO_LAT = { 'А':'A','В':'B','С':'C','Е':'E','Н':'H','К':'K','М':'M',
                      'О':'O','Р':'P','Т':'T','У':'Y','Х':'X','І':'I' };
@@ -132,12 +177,14 @@ const SCREENS = {
 
 function goTo(id) {
   const meta = SCREENS[id] || {};
+  if (!$('#' + id)) { console.error('[PRIMUM] Нет экрана', id); showVersionWarning(); return; }
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === id));
-  $('#head-sub').textContent = meta.sub || '';
+  const sub = $('#head-sub');
+  if (sub) sub.textContent = meta.sub || '';
   const back = $('#btn-head-back');
-  back.hidden = !meta.back;
-  back.dataset.target = meta.back || '';
+  if (back) { back.hidden = !meta.back; back.dataset.target = meta.back || ''; }
   const dots = $('#navdots');
+  if (!dots) return;
   if (meta.dots) {
     dots.hidden = false;
     dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === meta.dots - 1));
@@ -205,9 +252,11 @@ async function loadBootstrap() {
 /** Состояние экрана входа: без списка сотрудников войти нельзя. */
 function updateBootStatus() {
   const banner = $('#boot-status');
+  const fio = $('#in-fio'), pwd = $('#in-pwd');
+  if (!banner || !fio || !pwd) return;
   const ready = state.bootLoaded && state.employees.length > 0;
-  $('#in-fio').disabled = !ready;
-  $('#in-pwd').disabled = !ready;
+  fio.disabled = !ready;
+  pwd.disabled = !ready;
   if (ready) { banner.hidden = true; }
   else {
     banner.hidden = false;
@@ -226,6 +275,7 @@ function updateBootStatus() {
 /** Пункты обращения приходят с сервера — заполняем выпадающий список. */
 function fillTopics() {
   const sel = $('#in-topic');
+  if (!sel) return;
   const current = sel.value;
   sel.querySelectorAll('option:not([disabled])').forEach((o) => o.remove());
   state.topics.forEach((t) => {
@@ -238,6 +288,7 @@ function fillTopics() {
 /** Состояние экрана обращений: нужны инженеры, автопарк и пункты. */
 function updateAppealStatus() {
   const banner = $('#appeal-status');
+  if (!banner || !$('#in-eng') || !$('#in-topic')) return;
   const problems = [];
   if (!state.engineers.length) problems.push('список инженеров');
   if (!state.fleet.tractors.length) problems.push('автопарк');
@@ -259,9 +310,11 @@ function updateAppealStatus() {
 /** Состояние экрана ТС: без автопарка опрос невозможен. */
 function updateFleetStatus() {
   const banner = $('#fleet-status');
+  const tr = $('#in-tractor'), tl = $('#in-trailer');
+  if (!banner || !tr || !tl) return;
   const ready = state.fleet.tractors.length > 0;
-  $('#in-tractor').disabled = !ready;
-  $('#in-trailer').disabled = !ready;
+  tr.disabled = !ready;
+  tl.disabled = !ready;
   if (ready) { banner.hidden = true; }
   else {
     banner.hidden = false;
@@ -273,8 +326,9 @@ function updateFleetStatus() {
 
 /* ---------- Ошибки полей ---------- */
 function setFieldError(inputSel, errSel, message) {
-  const err = $(errSel);
-  const wrap = $(inputSel).closest('.plate, .tf, .pwd');
+  const err = $(errSel), input = $(inputSel);
+  if (!err || !input) return;
+  const wrap = input.closest('.plate, .tf, .pwd');
   if (message) {
     err.textContent = message; err.hidden = false;
     if (wrap) wrap.classList.add('bad');
@@ -288,6 +342,7 @@ function setFieldError(inputSel, errSel, message) {
 function setupAutocomplete(inputSel, listSel, kind) {
   const input = $(inputSel);
   const list = $(listSel);
+  if (!input || !list) { missingEls.push(inputSel + '/' + listSel); return; }
   let active = -1;
 
   const isPlate = kind === 'tractor' || kind === 'trailer' || kind === 'vehicle';
@@ -518,6 +573,7 @@ async function doLogout() {
 /* ---------- Шкала оценки ---------- */
 function buildScale() {
   const scale = $('#scale');
+  if (!scale) { missingEls.push('#scale'); return; }
   scale.innerHTML = '';
   for (let i = 0; i <= 10; i++) {
     const dot = document.createElement('button');
@@ -736,6 +792,10 @@ async function diagReset() {
 function setupCarousel(trackSel, prevSel, nextSel, countSel) {
   const track = $(trackSel);
   const prev = $(prevSel), next = $(nextSel), count = $(countSel);
+  if (!track || !prev || !next || !count) {
+    missingEls.push(trackSel);
+    return { update: function () {}, reset: function () {} };
+  }
   let timer = null;
   let idx = 0;   // текущий/целевой слайд
 
@@ -935,11 +995,13 @@ function startSurvey() {
 async function init() {
   // выпадающий список автосервисов
   const sel = $('#in-service');
-  CONFIG.SERVICE_CENTERS.forEach((s) => {
-    const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
-  });
-  sel.addEventListener('change', () => { state.service = sel.value; validateRating(); });
-  $('#in-comment').addEventListener('input', (e) => { state.comment = e.target.value; validateRating(); });
+  if (sel) {
+    CONFIG.SERVICE_CENTERS.forEach((s) => {
+      const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
+    });
+  } else { missingEls.push('#in-service'); }
+  on('#in-service', 'change', () => { state.service = sel.value; validateRating(); });
+  on('#in-comment', 'input', (e) => { state.comment = e.target.value; validateRating(); });
 
   buildScale();
   setupAutocomplete('#in-fio', '#list-fio', 'employee');
@@ -949,74 +1011,81 @@ async function init() {
   setupAutocomplete('#in-trailer', '#list-trailer', 'trailer');
 
   // вход
-  $('#in-pwd').addEventListener('input', () => {
+  on('#in-pwd', 'input', () => {
     setFieldError('#in-pwd', '#err-login', '');
     validateLogin();
   });
-  $('#in-pwd').addEventListener('keydown', (e) => {
+  on('#in-pwd', 'keydown', (e) => {
     if (e.key === 'Enter' && !$('#btn-login').disabled) doLogin();
   });
-  $('#btn-eye').addEventListener('click', () => {
+  on('#btn-eye', 'click', () => {
     const inp = $('#in-pwd');
     const shown = inp.type === 'text';
     inp.type = shown ? 'password' : 'text';
     $('#btn-eye').textContent = shown ? 'Показать' : 'Скрыть';
   });
-  $('#btn-login').addEventListener('click', doLogin);
-  $('#btn-diag').addEventListener('click', () => { renderDiag(); goTo('view-diag'); });
-  $('#diag-server').addEventListener('click', diagCheckServer);
-  $('#diag-login').addEventListener('click', diagCheckLogin);
-  $('#diag-reset').addEventListener('click', diagReset);
-  $('#btn-logout').addEventListener('click', doLogout);
+  on('#btn-login', 'click', doLogin);
+  on('#btn-diag', 'click', () => { renderDiag(); goTo('view-diag'); });
+  on('#diag-server', 'click', diagCheckServer);
+  on('#diag-login', 'click', diagCheckLogin);
+  on('#diag-reset', 'click', diagReset);
+  on('#btn-logout', 'click', doLogout);
 
   // главная
-  $('#tile-rating').addEventListener('click', startSurvey);
-  $('#tile-inbox').addEventListener('click', startAppeal);
-  $('#tile-eco').addEventListener('click', openEcoMenu);
+  on('#tile-rating', 'click', startSurvey);
+  on('#tile-inbox', 'click', startAppeal);
+  on('#tile-eco', 'click', openEcoMenu);
   // Раздел в разработке: нажатие пока не выполняет переход.
-  $('#tile-newbie').addEventListener('click', () => {});
+  on('#tile-newbie', 'click', () => {});
 
   // эко-вождение
   carMedia = setupCarousel('#media-track', '#media-prev', '#media-next', '#media-count');
   carText  = setupCarousel('#text-track', '#text-prev', '#text-next', '#text-count');
-  $('#eco-what').addEventListener('click', () => openEcoMedia('what'));
-  $('#eco-tips').addEventListener('click', () => openEcoMedia('tips'));
-  $('#eco-instruction').addEventListener('click', openEcoText);
-  $('#media-track').addEventListener('click', (e) => {
+  on('#eco-what', 'click', () => openEcoMedia('what'));
+  on('#eco-tips', 'click', () => openEcoMedia('tips'));
+  on('#eco-instruction', 'click', openEcoText);
+  on('#media-track', 'click', (e) => {
     const img = e.target.closest('img');
     if (img) openZoom(img.src, img.alt);
   });
-  $('#zoom-close').addEventListener('click', closeZoom);
+  on('#zoom-close', 'click', closeZoom);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#zoom').hidden) closeZoom();
+    const z = $('#zoom');
+    if (e.key === 'Escape' && z && !z.hidden) closeZoom();
   });
 
   // форма обращения
-  $('#in-topic').addEventListener('change', (e) => {
+  on('#in-topic', 'change', (e) => {
     state.topic = e.target.value;
     const isOther = state.topic === 'Свой вариант';
     $('#wrap-topic-custom').hidden = !isOther;
     if (!isOther) { state.topicCustom = ''; $('#in-topic-custom').value = ''; }
     validateAppeal(false);
   });
-  $('#in-topic-custom').addEventListener('input', (e) => {
+  on('#in-topic-custom', 'input', (e) => {
     state.topicCustom = e.target.value; validateAppeal(false);
   });
-  $('#in-message').addEventListener('input', (e) => {
+  on('#in-message', 'input', (e) => {
     state.message = e.target.value; validateAppeal(false);
   });
-  $('#btn-appeal-send').addEventListener('click', submitAppeal);
+  on('#btn-appeal-send', 'click', submitAppeal);
 
   // опрос
-  $('#btn-next').addEventListener('click', () => goTo('view-rating'));
-  $('#btn-back').addEventListener('click', () => goTo('view-vehicle'));
-  $('#btn-submit').addEventListener('click', submit);
-  $('#btn-home').addEventListener('click', () => goTo('view-home'));
-  $('#btn-head-back').addEventListener('click', (e) => {
+  on('#btn-next', 'click', () => goTo('view-rating'));
+  on('#btn-back', 'click', () => goTo('view-vehicle'));
+  on('#btn-submit', 'click', submit);
+  on('#btn-home', 'click', () => goTo('view-home'));
+  on('#btn-head-back', 'click', (e) => {
     if (!$('#zoom').hidden) { closeZoom(); return; }
     const t = e.currentTarget.dataset.target;
     if (t) goTo(t);
   });
+
+  // Если разметка не соответствует коду — предупреждаем явно, а не молчим.
+  if (missingEls.length) {
+    console.error('[PRIMUM] Нет элементов разметки:', missingEls.join(', '));
+    showVersionWarning();
+  }
 
   // восстановление сессии
   const session = await idbGet('kv', 'session').catch(() => null);
@@ -1039,7 +1108,14 @@ async function init() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+  // Любая непредвиденная ошибка не должна оставлять пользователя
+  // с молча неработающим приложением.
+  init().catch((e) => {
+    console.error('[PRIMUM] Сбой инициализации:', e);
+    showVersionWarning();
+  });
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));

@@ -1,5 +1,5 @@
 /* PRIMUM service worker — офлайн-оболочка + фоновая досылка ответов. */
-const CACHE = 'primum-shell-v9';
+const CACHE = 'primum-shell-v10';
 const SHELL = [
   './',
   './index.html',
@@ -17,7 +17,19 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Файлы кладём в кэш ПООДИНОЧКЕ. cache.addAll() атомарен: один недостающий
+  // файл (например, не залитый на хостинг) обрушивал установку целиком,
+  // из-за чего новый service worker не активировался и устройство
+  // продолжало работать на старом коде.
+  e.waitUntil(
+    caches.open(CACHE).then((c) =>
+      Promise.all(SHELL.map((url) =>
+        c.add(url).catch((err) => {
+          console.warn('[PRIMUM SW] Не удалось закэшировать', url, err && err.message);
+        })
+      ))
+    ).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
