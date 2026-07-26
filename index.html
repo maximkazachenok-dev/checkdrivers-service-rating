@@ -256,7 +256,6 @@
         </button>
 
         <button class="tile" id="tile-inbox">
-          <span class="soon">Скоро</span>
           <span class="tile-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" stroke-linejoin="round">
@@ -352,13 +351,60 @@
       <button class="btn btn-primary" id="btn-submit" disabled>Отправить</button>
     </section>
 
+    <!-- ЭКРАН: ящик обращений -->
+    <section class="view" id="view-appeal">
+      <div class="h1">Ящик обращений</div>
+      <p class="lead">Ваш вопрос или предложение поступит в отдел контроля.</p>
+      <p class="banner" id="appeal-status" hidden></p>
+
+      <div class="ac">
+        <div class="field-label">Ведущий инженер <span class="req">*</span></div>
+        <div class="tf">
+          <input id="in-eng" autocomplete="off" role="combobox" aria-autocomplete="list"
+                 aria-expanded="false" placeholder="Начните вводить фамилию">
+        </div>
+        <ul class="aclist names" id="list-eng" role="listbox" hidden></ul>
+        <p class="err" id="err-eng" role="alert" hidden></p>
+      </div>
+
+      <div class="ac">
+        <div class="field-label">Гос. номер автомобиля <span class="req">*</span></div>
+        <div class="plate">
+          <span class="flag">BY</span>
+          <input class="input" id="in-vehicle" autocomplete="off" role="combobox"
+                 aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
+        </div>
+        <ul class="aclist" id="list-vehicle" role="listbox" hidden></ul>
+        <p class="err" id="err-vehicle" role="alert" hidden></p>
+      </div>
+
+      <div class="field-label">Пункт обращения <span class="req">*</span></div>
+      <select class="select" id="in-topic" required>
+        <option value="" disabled selected hidden>Выберите пункт</option>
+      </select>
+
+      <div id="wrap-topic-custom" hidden>
+        <div class="field-label">Укажите свой вариант <span class="req">*</span></div>
+        <div class="tf" style="margin-bottom:18px">
+          <input id="in-topic-custom" autocomplete="off" placeholder="Кратко назовите тему">
+        </div>
+      </div>
+
+      <div class="field-label">Описание <span class="req">*</span></div>
+      <textarea class="textarea" id="in-message"
+                placeholder="Опишите вопрос, проблему или предложение"></textarea>
+
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="btn-appeal-send" disabled>Отправить обращение</button>
+    </section>
+
     <!-- ЭКРАН: спасибо -->
     <section class="view" id="view-thanks">
       <div class="check">
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5 11-11" stroke="#D6303F"
              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div class="thx-h">Спасибо<br>за ваш отзыв!</div>
+      <div class="thx-h" id="thanks-h">Спасибо<br>за ваш отзыв!</div>
       <p id="thanks-note">Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.</p>
       <button class="btn btn-primary" id="btn-home" style="max-width:220px">&#8592; На главную</button>
     </section>

@@ -2,9 +2,9 @@
  * Настройка: API_URL (URL веб-приложения Apps Script) и тот же SHARED_TOKEN, что в Code.gs. */
 
 const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbw-mlKo2jM_P-BOIwfXZS2nzK6vgobvE2TOQ4BBiVFJ6aodldovBznM11ScRWd1hQpitQ/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.0.0',
+  APP_VERSION: '2.1.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -69,12 +69,16 @@ async function sha256hex(text) {
 
 /* ---------- Состояние ---------- */
 const state = {
-  employees: [],            // только ФИО, без паролей
+  employees: [],            // ФИО тех, кто может входить (без паролей)
+  engineers: [],            // ФИО ведущих инженеров
+  topics: [],               // пункты обращения (источник истины — Code.gs)
   fleet: { tractors: [], trailers: [] },
   bootLoaded: false,
   session: null,            // { fio }
-  // текущий опрос
-  tractor: '', trailer: '', service: '', rating: null, comment: ''
+  // опрос по ремонту
+  tractor: '', trailer: '', service: '', rating: null, comment: '',
+  // обращение
+  engineer: '', vehicle: '', topic: '', topicCustom: '', message: ''
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -98,6 +102,7 @@ function normName(s) {
 const SCREENS = {
   'view-login':   { sub: 'Вход',            back: null,           dots: 0 },
   'view-home':    { sub: 'Главная',         back: null,           dots: 0 },
+  'view-appeal':  { sub: 'Ящик обращений',  back: 'view-home',    dots: 0 },
   'view-vehicle': { sub: 'Оценка ремонта',  back: 'view-home',    dots: 1 },
   'view-rating':  { sub: 'Оценка ремонта',  back: 'view-vehicle', dots: 2 },
   'view-thanks':  { sub: 'Оценка ремонта',  back: null,           dots: 3 }
@@ -125,6 +130,8 @@ async function loadBootstrap() {
   const cached = await idbGet('kv', 'bootstrap').catch(() => null);
   if (cached && cached.employees && cached.employees.length) {
     state.employees = cached.employees;
+    state.engineers = cached.engineers || [];
+    state.topics = cached.topics || [];
     state.fleet = cached.fleet || { tractors: [], trailers: [] };
     state.bootLoaded = true;
   }
@@ -135,12 +142,19 @@ async function loadBootstrap() {
       const data = await res.json();
       if (data.ok && Array.isArray(data.employees)) {
         state.employees = data.employees;
+        state.engineers = data.engineers || [];
+        state.topics = data.topics || [];
         state.fleet = { tractors: data.tractors || [], trailers: data.trailers || [] };
         state.bootLoaded = true;
-        await idbPut('kv', { employees: state.employees, fleet: state.fleet }, 'bootstrap').catch(() => {});
+        await idbPut('kv', {
+          employees: state.employees, engineers: state.engineers,
+          topics: state.topics, fleet: state.fleet
+        }, 'bootstrap').catch(() => {});
+        fillTopics();
         console.info('[PRIMUM] Справочники: сотрудников', state.employees.length,
+                     ', инженеров', state.engineers.length,
                      ', тягачей', state.fleet.tractors.length,
-                     ', прицепов', state.fleet.trailers.length);
+                     ', пунктов обращения', state.topics.length);
       } else if (data.error === 'unauthorized') {
         console.error('[PRIMUM] Неверный SHARED_TOKEN — не совпадает с Code.gs');
       } else {
@@ -168,6 +182,39 @@ function updateBootStatus() {
       : 'Нет связи. Для первого входа нужен интернет.';
   }
   validateLogin();
+}
+
+/** Пункты обращения приходят с сервера — заполняем выпадающий список. */
+function fillTopics() {
+  const sel = $('#in-topic');
+  const current = sel.value;
+  sel.querySelectorAll('option:not([disabled])').forEach((o) => o.remove());
+  state.topics.forEach((t) => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t; sel.appendChild(o);
+  });
+  if (current && state.topics.indexOf(current) !== -1) sel.value = current;
+}
+
+/** Состояние экрана обращений: нужны инженеры, автопарк и пункты. */
+function updateAppealStatus() {
+  const banner = $('#appeal-status');
+  const problems = [];
+  if (!state.engineers.length) problems.push('список инженеров');
+  if (!state.fleet.tractors.length) problems.push('автопарк');
+  if (!state.topics.length) problems.push('пункты обращения');
+  const ready = problems.length === 0;
+  $('#in-eng').disabled = !ready;
+  $('#in-vehicle').disabled = !ready;
+  $('#in-topic').disabled = !ready;
+  $('#in-message').disabled = !ready;
+  if (ready) { banner.hidden = true; }
+  else {
+    banner.hidden = false;
+    banner.textContent = navigator.onLine
+      ? 'Не удалось загрузить: ' + problems.join(', ') + '. Обновите страницу.'
+      : 'Нет связи. Справочники загрузятся при подключении к интернету.';
+  }
 }
 
 /** Состояние экрана ТС: без автопарка опрос невозможен. */
@@ -204,12 +251,13 @@ function setupAutocomplete(inputSel, listSel, kind) {
   const list = $(listSel);
   let active = -1;
 
-  const isPlate = kind === 'tractor' || kind === 'trailer';
+  const isPlate = kind === 'tractor' || kind === 'trailer' || kind === 'vehicle';
   const norm = isPlate ? normPlate : normName;
 
   function source() {
-    if (kind === 'tractor') return state.fleet.tractors;
+    if (kind === 'tractor' || kind === 'vehicle') return state.fleet.tractors;
     if (kind === 'trailer') return state.fleet.trailers;
+    if (kind === 'engineer') return state.engineers;
     return state.employees;
   }
 
@@ -238,14 +286,22 @@ function setupAutocomplete(inputSel, listSel, kind) {
   function commit(val) {
     if (kind === 'tractor') state.tractor = val;
     else if (kind === 'trailer') state.trailer = val;
-    else state.fioInput = val;
+    else if (kind === 'vehicle') state.vehicle = val;
+    else if (kind === 'engineer') state.engineer = val;
+  }
+
+  /** Какую проверку запускать после изменения этого поля. */
+  function revalidate() {
+    if (kind === 'tractor' || kind === 'trailer') validateAuthVehicle();
+    else if (kind === 'vehicle' || kind === 'engineer') validateAppeal();
+    else validateLogin();
   }
 
   function choose(val) {
     input.value = val;
     commit(val);
     list.hidden = true;
-    if (isPlate) validateAuthVehicle(); else validateLogin();
+    revalidate();
   }
 
   input.addEventListener('input', () => {
@@ -253,9 +309,11 @@ function setupAutocomplete(inputSel, listSel, kind) {
     // Во время набора ошибку не показываем — только снимаем.
     if (kind === 'tractor') setFieldError('#in-tractor', '#err-tractor', '');
     else if (kind === 'trailer') setFieldError('#in-trailer', '#err-trailer', '');
+    else if (kind === 'vehicle') setFieldError('#in-vehicle', '#err-vehicle', '');
+    else if (kind === 'engineer') setFieldError('#in-eng', '#err-eng', '');
     else setFieldError('#in-fio', '#err-login', '');
     filter();
-    if (isPlate) validateAuthVehicle(); else validateLogin();
+    revalidate();
   });
 
   input.addEventListener('keydown', (e) => {
@@ -275,7 +333,9 @@ function setupAutocomplete(inputSel, listSel, kind) {
   input.addEventListener('blur', () => {
     setTimeout(() => {
       list.hidden = true;
-      if (isPlate) validateAuthVehicle();
+      // Ошибку показываем при уходе с поля, а не во время набора.
+      if (kind === 'tractor' || kind === 'trailer') validateAuthVehicle();
+      else if (kind === 'vehicle' || kind === 'engineer') validateAppeal(true);
     }, 150);
   });
 
@@ -290,6 +350,18 @@ function matchPlate(value, kind) {
   if (!q) return null;
   const list = kind === 'tractor' ? state.fleet.tractors : state.fleet.trailers;
   for (const n of list) if (normPlate(n) === q) return n;
+  return null;
+}
+function matchEngineer(value) {
+  const q = normName(value);
+  if (!q) return null;
+  for (const n of state.engineers) if (normName(n) === q) return n;
+  return null;
+}
+function matchVehicle(value) {
+  const q = normPlate(value);
+  if (!q) return null;
+  for (const n of state.fleet.tractors) if (normPlate(n) === q) return n;
   return null;
 }
 function matchEmployee(value) {
@@ -315,6 +387,22 @@ function validateAuthVehicle() {
   setFieldError('#in-tractor', '#err-tractor', tRaw && !tOk ? 'Номер не найден в автопарке' : '');
   setFieldError('#in-trailer', '#err-trailer', trRaw && !trOk ? 'Номер не найден в автопарке' : '');
   $('#btn-next').disabled = !(tOk && trOk);
+}
+
+/** Проверка формы обращения. showErrors — показывать ли подписи об ошибках. */
+function validateAppeal(showErrors) {
+  const engRaw = state.engineer.trim();
+  const vehRaw = state.vehicle.trim();
+  const engOk = !!matchEngineer(engRaw);
+  const vehOk = !!matchVehicle(vehRaw);
+  if (showErrors) {
+    setFieldError('#in-eng', '#err-eng', engRaw && !engOk ? 'Инженер не найден в списке' : '');
+    setFieldError('#in-vehicle', '#err-vehicle', vehRaw && !vehOk ? 'Номер не найден в автопарке' : '');
+  }
+  const customNeeded = state.topic === 'Свой вариант';
+  const customOk = !customNeeded || state.topicCustom.trim().length > 0;
+  const ok = engOk && vehOk && state.topic && customOk && state.message.trim();
+  $('#btn-appeal-send').disabled = !ok;
 }
 
 function validateRating() {
@@ -473,26 +561,85 @@ async function submit() {
     if (CONFIG.API_URL.startsWith('PASTE')) throw new Error('not_configured');
     await sendPayload(payload);
     await idbDel('queue', payload.client_id);
-    goTo('view-thanks');
-    $('#thanks-note').textContent = 'Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.';
+    showThanks('Спасибо<br>за ваш отзыв!',
+               'Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.');
   } catch (e) {
     console.error('[PRIMUM] Ошибка отправки:', e);
-    goTo('view-thanks');
-    const note = $('#thanks-note');
-    if (String(e.message) === 'not_configured') {
-      note.textContent = 'Приложение не настроено: не указан адрес сервера. Обратитесь к администратору.';
-    } else if (String(e.message) === 'not_delivered') {
-      note.textContent = 'Сервер не подтвердил запись. Ответ сохранён и будет отправлен повторно автоматически.';
-    } else if (!navigator.onLine) {
-      note.textContent = 'Нет связи — ответ сохранён и будет отправлен автоматически, когда появится интернет.';
-    } else {
-      note.textContent = 'Сервер недоступен. Ответ сохранён и будет отправлен повторно автоматически.';
-    }
+    showThanks('Ответ<br>сохранён', queueMessage(e));
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       navigator.serviceWorker.ready.then((reg) => reg.sync.register('primum-flush')).catch(() => {});
     }
   }
   updatePending();
+}
+
+/* ---------- Обращение: отправка ---------- */
+
+async function submitAppeal() {
+  const btn = $('#btn-appeal-send');
+  btn.disabled = true;
+  const payload = {
+    token: CONFIG.SHARED_TOKEN,
+    kind: 'appeal',
+    client_id: uuid(),
+    employee: state.session ? state.session.fio : '',
+    engineer: state.engineer.trim(),
+    vehicle: state.vehicle.trim(),
+    topic: state.topic,
+    topic_custom: state.topic === 'Свой вариант' ? state.topicCustom.trim() : '',
+    message: state.message.trim(),
+    app_version: CONFIG.APP_VERSION
+  };
+
+  await idbPut('queue', payload).catch(() => {});
+  try {
+    if (CONFIG.API_URL.startsWith('PASTE')) throw new Error('not_configured');
+    await sendPayload(payload);
+    await idbDel('queue', payload.client_id);
+    showThanks('Обращение<br>отправлено',
+               'Ваше обращение передано в отдел контроля. С вами свяжутся при необходимости.');
+  } catch (e) {
+    console.error('[PRIMUM] Ошибка отправки обращения:', e);
+    showThanks('Обращение<br>сохранено', queueMessage(e));
+    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+      navigator.serviceWorker.ready.then((reg) => reg.sync.register('primum-flush')).catch(() => {});
+    }
+  }
+  updatePending();
+}
+
+/** Экран благодарности с нужным заголовком и текстом. */
+function showThanks(heading, note) {
+  $('#thanks-h').innerHTML = heading;
+  $('#thanks-note').textContent = note;
+  goTo('view-thanks');
+}
+
+/** Текст для случаев, когда запись осталась в очереди. */
+function queueMessage(e) {
+  const m = String(e && e.message);
+  if (m === 'not_configured') return 'Приложение не настроено: не указан адрес сервера. Обратитесь к администратору.';
+  if (m === 'not_delivered') return 'Сервер не подтвердил запись. Данные сохранены и будут отправлены повторно автоматически.';
+  if (!navigator.onLine) return 'Нет связи — данные сохранены и будут отправлены автоматически, когда появится интернет.';
+  return 'Сервер недоступен. Данные сохранены и будут отправлены повторно автоматически.';
+}
+
+/* ---------- Обращение: старт и сброс ---------- */
+
+function startAppeal() {
+  state.engineer = state.vehicle = state.topic = state.topicCustom = state.message = '';
+  $('#in-eng').value = '';
+  $('#in-vehicle').value = '';
+  $('#in-topic').value = '';
+  $('#in-topic-custom').value = '';
+  $('#in-message').value = '';
+  $('#wrap-topic-custom').hidden = true;
+  setFieldError('#in-eng', '#err-eng', '');
+  setFieldError('#in-vehicle', '#err-vehicle', '');
+  fillTopics();
+  updateAppealStatus();
+  validateAppeal(false);
+  goTo('view-appeal');
 }
 
 /* ---------- Опрос: старт и сброс ---------- */
@@ -524,6 +671,8 @@ async function init() {
 
   buildScale();
   setupAutocomplete('#in-fio', '#list-fio', 'employee');
+  setupAutocomplete('#in-eng', '#list-eng', 'engineer');
+  setupAutocomplete('#in-vehicle', '#list-vehicle', 'vehicle');
   setupAutocomplete('#in-tractor', '#list-tractor', 'tractor');
   setupAutocomplete('#in-trailer', '#list-trailer', 'trailer');
 
@@ -546,10 +695,27 @@ async function init() {
 
   // главная
   $('#tile-rating').addEventListener('click', startSurvey);
+  $('#tile-inbox').addEventListener('click', startAppeal);
   // Разделы в разработке: нажатие пока не выполняет переход.
-  ['#tile-inbox', '#tile-eco', '#tile-newbie'].forEach((sel2) => {
+  ['#tile-eco', '#tile-newbie'].forEach((sel2) => {
     $(sel2).addEventListener('click', () => {});
   });
+
+  // форма обращения
+  $('#in-topic').addEventListener('change', (e) => {
+    state.topic = e.target.value;
+    const isOther = state.topic === 'Свой вариант';
+    $('#wrap-topic-custom').hidden = !isOther;
+    if (!isOther) { state.topicCustom = ''; $('#in-topic-custom').value = ''; }
+    validateAppeal(false);
+  });
+  $('#in-topic-custom').addEventListener('input', (e) => {
+    state.topicCustom = e.target.value; validateAppeal(false);
+  });
+  $('#in-message').addEventListener('input', (e) => {
+    state.message = e.target.value; validateAppeal(false);
+  });
+  $('#btn-appeal-send').addEventListener('click', submitAppeal);
 
   // опрос
   $('#btn-next').addEventListener('click', () => goTo('view-rating'));
