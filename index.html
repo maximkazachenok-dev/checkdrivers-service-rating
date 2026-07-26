@@ -288,6 +288,7 @@
         <div class="field-label">ФИО <span class="req">*</span></div>
         <div class="tf">
           <input id="in-fio" autocomplete="off" role="combobox" aria-autocomplete="list"
+                 autocapitalize="none" autocorrect="off" spellcheck="false"
                  aria-expanded="false" placeholder="Начните вводить фамилию">
         </div>
         <ul class="aclist names" id="list-fio" role="listbox" hidden></ul>
@@ -296,7 +297,9 @@
       <div class="ac">
         <div class="field-label">Пароль <span class="req">*</span></div>
         <div class="pwd" id="wrap-pwd">
-          <input id="in-pwd" type="password" autocomplete="current-password" placeholder="Введите пароль">
+          <input id="in-pwd" type="password" autocomplete="current-password"
+                 autocapitalize="none" autocorrect="off" spellcheck="false"
+                 inputmode="text" placeholder="Введите пароль">
           <button type="button" id="btn-eye">Показать</button>
         </div>
         <p class="err" id="err-login" role="alert" hidden></p>
@@ -305,6 +308,20 @@
       <div class="spacer"></div>
       <button class="btn btn-primary" id="btn-login" disabled>Войти</button>
       <p class="fine">Доступ только для сотрудников PRIMUM.</p>
+      <button class="btn-text" id="btn-diag" style="padding:10px">Диагностика</button>
+    </section>
+
+    <!-- ЭКРАН: диагностика -->
+    <section class="view" id="view-diag">
+      <div class="h1">Диагностика</div>
+      <p class="lead">Экран для проверки связи и настроек. Покажите его администратору, если приложение работает неправильно.</p>
+      <div class="diag" id="diag-list"></div>
+      <div class="diag-out" id="diag-out" hidden></div>
+      <button class="btn btn-ghost" id="diag-server">Проверить связь с сервером</button>
+      <button class="btn btn-ghost" id="diag-login">Проверить введённый пароль</button>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="diag-reset">Сбросить кэш и перезапустить</button>
+      <p class="fine">Сброс удалит сохранённые данные приложения и загрузит свежую версию. Неотправленные ответы будут потеряны.</p>
     </section>
 
     <!-- ЭКРАН: главная -->
@@ -374,7 +391,7 @@
         <div class="field-label">Номер тягача <span class="req">*</span></div>
         <div class="plate">
           <span class="flag">BY</span>
-          <input class="input" id="in-tractor" autocomplete="off" role="combobox"
+          <input class="input" id="in-tractor" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
         </div>
         <ul class="aclist" id="list-tractor" role="listbox" hidden></ul>
@@ -385,7 +402,7 @@
         <div class="field-label">Номер прицепа</div>
         <div class="plate">
           <span class="flag">BY</span>
-          <input class="input" id="in-trailer" autocomplete="off" role="combobox"
+          <input class="input" id="in-trailer" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер, если есть">
         </div>
         <ul class="aclist" id="list-trailer" role="listbox" hidden></ul>
@@ -506,6 +523,7 @@
         <div class="field-label">Ведущий инженер <span class="req">*</span></div>
         <div class="tf">
           <input id="in-eng" autocomplete="off" role="combobox" aria-autocomplete="list"
+                 autocapitalize="none" autocorrect="off" spellcheck="false"
                  aria-expanded="false" placeholder="Начните вводить фамилию">
         </div>
         <ul class="aclist names" id="list-eng" role="listbox" hidden></ul>
@@ -516,7 +534,7 @@
         <div class="field-label">Гос. номер автомобиля <span class="req">*</span></div>
         <div class="plate">
           <span class="flag">BY</span>
-          <input class="input" id="in-vehicle" autocomplete="off" role="combobox"
+          <input class="input" id="in-vehicle" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
         </div>
         <ul class="aclist" id="list-vehicle" role="listbox" hidden></ul>

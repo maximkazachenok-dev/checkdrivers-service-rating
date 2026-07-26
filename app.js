@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.2.0',
+  APP_VERSION: '2.2.1',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -74,6 +74,7 @@ const state = {
   topics: [],               // пункты обращения (источник истины — Code.gs)
   fleet: { tractors: [], trailers: [] },
   bootLoaded: false,
+  lastBootError: '',        // причина последнего сбоя загрузки — для диагностики
   session: null,            // { fio }
   // опрос по ремонту
   tractor: '', trailer: '', service: '', rating: null, comment: '',
@@ -98,11 +99,29 @@ function normName(s) {
   return String(s).toUpperCase().replace(/Ё/g, 'Е').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Пароль: убираем то, что подставляют мобильные клавиатуры.
+ * «Умная пунктуация» iOS меняет дефис на тире и кавычки на типографские,
+ * автозамена вставляет неразрывные и нулевой ширины пробелы. На ПК этого нет,
+ * поэтому один и тот же пароль давал разный хеш на телефоне и компьютере.
+ * Точно такая же нормализация выполняется на сервере — иначе хеши не совпадут.
+ */
+function normPassword(s) {
+  return String(s)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')      // нулевой ширины
+    .replace(/\u00A0/g, ' ')                     // неразрывный пробел
+    .replace(/[\u2010-\u2015\u2212]/g, '-')      // тире разных видов → дефис
+    .replace(/[\u2018\u2019\u201B\u2032]/g, "'") // типографские апострофы
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"') // типографские кавычки
+    .trim();
+}
+
 /* ---------- Навигация ---------- */
 const SCREENS = {
   'view-login':   { sub: 'Вход',            back: null,           dots: 0 },
   'view-home':    { sub: 'Главная',         back: null,           dots: 0 },
   'view-appeal':  { sub: 'Ящик обращений',  back: 'view-home',    dots: 0 },
+  'view-diag':    { sub: 'Диагностика',     back: 'view-login',   dots: 0 },
   'view-eco':     { sub: 'Эко-вождение',    back: 'view-home',    dots: 0 },
   'view-eco-media': { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
   'view-eco-text':  { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
@@ -138,33 +157,45 @@ async function loadBootstrap() {
     state.fleet = cached.fleet || { tractors: [], trailers: [] };
     state.bootLoaded = true;
   }
-  if (navigator.onLine && !CONFIG.API_URL.startsWith('PASTE')) {
-    try {
-      const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN);
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.employees)) {
-        state.employees = data.employees;
-        state.engineers = data.engineers || [];
-        state.topics = data.topics || [];
-        state.fleet = { tractors: data.tractors || [], trailers: data.trailers || [] };
-        state.bootLoaded = true;
-        await idbPut('kv', {
-          employees: state.employees, engineers: state.engineers,
-          topics: state.topics, fleet: state.fleet
-        }, 'bootstrap').catch(() => {});
-        fillTopics();
-        console.info('[PRIMUM] Справочники: сотрудников', state.employees.length,
-                     ', инженеров', state.engineers.length,
-                     ', тягачей', state.fleet.tractors.length,
-                     ', пунктов обращения', state.topics.length);
-      } else if (data.error === 'unauthorized') {
-        console.error('[PRIMUM] Неверный SHARED_TOKEN — не совпадает с Code.gs');
-      } else {
-        console.error('[PRIMUM] Сервер вернул ошибку:', data.error);
+  // navigator.onLine здесь НЕ используется как условие: при холодном старте
+  // установленного приложения он часто ещё false, хотя сеть есть. Пробуем всегда,
+  // а неудачу трактуем как отсутствие связи.
+  if (!CONFIG.API_URL.startsWith('PASTE')) {
+    const attempts = state.bootLoaded ? 1 : 3;   // без кэша настойчивее
+    for (let a = 1; a <= attempts; a++) {
+      try {
+        const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) +
+                    '&t=' + Date.now();
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.employees)) {
+          state.employees = data.employees;
+          state.engineers = data.engineers || [];
+          state.topics = data.topics || [];
+          state.fleet = { tractors: data.tractors || [], trailers: data.trailers || [] };
+          state.bootLoaded = true;
+          state.lastBootError = '';
+          await idbPut('kv', {
+            employees: state.employees, engineers: state.engineers,
+            topics: state.topics, fleet: state.fleet
+          }, 'bootstrap').catch(() => {});
+          fillTopics();
+          console.info('[PRIMUM] Справочники: сотрудников', state.employees.length,
+                       ', инженеров', state.engineers.length,
+                       ', тягачей', state.fleet.tractors.length,
+                       ', пунктов обращения', state.topics.length);
+          break;                                  // успех — выходим из цикла
+        }
+        state.lastBootError = data.error === 'unauthorized'
+          ? 'unauthorized: токен не совпадает с Code.gs'
+          : 'сервер вернул ошибку: ' + data.error;
+        console.error('[PRIMUM]', state.lastBootError);
+        break;                                    // сервер ответил — повторять смысла нет
+      } catch (e) {
+        state.lastBootError = 'сеть: ' + e.message;
+        console.warn('[PRIMUM] Попытка', a, 'из', attempts, '— сервер недоступен:', e.message);
+        if (a < attempts) await new Promise((r) => setTimeout(r, 800 * a));
       }
-    } catch (e) {
-      console.warn('[PRIMUM] Сервер недоступен, работаем на кэше:', e.message);
     }
   }
   updateBootStatus();
@@ -180,9 +211,14 @@ function updateBootStatus() {
   if (ready) { banner.hidden = true; }
   else {
     banner.hidden = false;
-    banner.textContent = navigator.onLine
-      ? 'Не удалось загрузить список сотрудников. Проверьте подключение и обновите страницу.'
-      : 'Нет связи. Для первого входа нужен интернет.';
+    banner.innerHTML =
+      '<span>Не удалось загрузить список сотрудников. Для первого входа нужен интернет.</span>' +
+      '<button type="button" class="banner-btn" id="boot-retry">Повторить</button>';
+    const btn = $('#boot-retry');
+    if (btn) btn.addEventListener('click', () => {
+      btn.textContent = 'Загрузка...';
+      loadBootstrap();
+    });
   }
   validateLogin();
 }
@@ -417,8 +453,8 @@ function validateRating() {
 async function doLogin() {
   const btn = $('#btn-login');
   const fioRaw = ($('#in-fio').value || '').trim();
-  // Пробелы по краям обрезаем: сервер хранит пароль так же обрезанным.
-  const pwd = ($('#in-pwd').value || '').trim();
+  // Нормализация обязательна: мобильные клавиатуры искажают символы.
+  const pwd = normPassword($('#in-pwd').value || '');
   const fio = matchEmployee(fioRaw);
   if (!fio) { setFieldError('#in-fio', '#err-login', 'Выберите ФИО из списка'); return; }
 
@@ -574,6 +610,121 @@ async function submit() {
     }
   }
   updatePending();
+}
+
+/* ---------- Диагностика ----------
+   На телефоне нет консоли разработчика, поэтому причину сбоя нужно показывать
+   в самом приложении — иначе диагностика превращается в перебор догадок. */
+
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+         window.navigator.standalone === true;
+}
+
+async function renderDiag() {
+  const rows = [];
+  const add = (k, v, status) => rows.push({ k: k, v: v, s: status || '' });
+
+  add('Версия приложения', CONFIG.APP_VERSION);
+  add('Режим запуска', isStandalone() ? 'установленное приложение' : 'браузер');
+  add('Защищённое соединение', window.isSecureContext ? 'да' : 'нет — нужен HTTPS',
+      window.isSecureContext ? 'good' : 'bad');
+  const hasCrypto = !!(window.crypto && window.crypto.subtle);
+  add('Шифрование пароля', hasCrypto ? 'доступно' : 'недоступно', hasCrypto ? 'good' : 'bad');
+  add('Сеть (по данным браузера)', navigator.onLine ? 'есть' : 'нет');
+
+  let cacheName = 'нет';
+  try {
+    const keys = await caches.keys();
+    cacheName = keys.length ? keys.join(', ') : 'пусто';
+  } catch (e) { cacheName = 'недоступно'; }
+  add('Версия кэша', cacheName);
+  add('Service worker', navigator.serviceWorker && navigator.serviceWorker.controller
+      ? 'активен' : 'не активен');
+
+  const ok = state.bootLoaded && state.employees.length > 0;
+  add('Справочники', ok
+      ? state.employees.length + ' сотр., ' + state.engineers.length + ' инж., ' +
+        state.fleet.tractors.length + ' тягачей'
+      : 'не загружены', ok ? 'good' : 'bad');
+  if (state.lastBootError) add('Последняя ошибка', state.lastBootError, 'bad');
+
+  const queued = await idbAll('queue').catch(() => []);
+  add('Неотправленных записей', String(queued.length), queued.length ? 'bad' : 'good');
+  add('Сессия', state.session ? state.session.fio : 'не выполнен вход');
+
+  $('#diag-list').innerHTML = rows.map((r) =>
+    '<div class="drow"><span class="dk">' + escapeHtml(r.k) + '</span>' +
+    '<span class="dv ' + r.s + '">' + escapeHtml(r.v) + '</span></div>'
+  ).join('');
+}
+
+function diagOut(text) {
+  const box = $('#diag-out');
+  box.hidden = false;
+  box.textContent = text;
+}
+
+async function diagCheckServer() {
+  diagOut('Запрос к серверу...');
+  const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) + '&t=' + Date.now();
+  const started = Date.now();
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const ms = Date.now() - started;
+    diagOut('HTTP ' + res.status + ' за ' + ms + ' мс\n\n' + text.slice(0, 600));
+  } catch (e) {
+    diagOut('Запрос не выполнен: ' + e.message +
+            '\n\nВозможные причины: нет интернета, неверный адрес сервера,' +
+            ' развёртывание Apps Script закрыто для всех.');
+  }
+}
+
+/** Показывает сырой ответ сервера на введённые ФИО и пароль — видно,
+ *  отвергнут пароль или дело в другом (не найден сотрудник, нет доступа). */
+async function diagCheckLogin() {
+  const fioRaw = ($('#in-fio').value || '').trim();
+  const pwdRaw = $('#in-pwd').value || '';
+  if (!fioRaw || !pwdRaw) {
+    diagOut('Сначала введите ФИО и пароль на экране входа, затем вернитесь сюда.');
+    return;
+  }
+  const pwd = normPassword(pwdRaw);
+  const changed = pwd !== pwdRaw.trim();
+  diagOut('Проверка...');
+  try {
+    const hash = await sha256hex(pwd);
+    const fio = matchEmployee(fioRaw) || fioRaw;
+    const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) +
+                '&login=' + encodeURIComponent(fio) + '&pwd=' + encodeURIComponent(hash) +
+                '&t=' + Date.now();
+    const res = await fetch(url);
+    const text = await res.text();
+    diagOut('ФИО передано: ' + fio +
+            '\nДлина пароля: ' + pwd.length + ' символов' +
+            (changed ? '\nВНИМАНИЕ: клавиатура подставила спецсимволы, они исправлены' : '') +
+            '\nФИО найдено в списке: ' + (matchEmployee(fioRaw) ? 'да' : 'НЕТ') +
+            '\n\nОтвет сервера:\n' + text.slice(0, 400));
+  } catch (e) {
+    diagOut('Ошибка: ' + e.message);
+  }
+}
+
+/** Полный сброс: снимает service worker, чистит кэш и хранилище. */
+async function diagReset() {
+  if (!window.confirm('Сбросить кэш и данные приложения? Неотправленные ответы будут потеряны.')) return;
+  diagOut('Сброс...');
+  try {
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    const keys = await caches.keys();
+    for (const k of keys) await caches.delete(k);
+    indexedDB.deleteDatabase(DB_NAME);
+  } catch (e) { /* продолжаем в любом случае */ }
+  setTimeout(() => location.reload(true), 600);
 }
 
 /* ---------- Карусели ---------- */
@@ -812,6 +963,10 @@ async function init() {
     $('#btn-eye').textContent = shown ? 'Показать' : 'Скрыть';
   });
   $('#btn-login').addEventListener('click', doLogin);
+  $('#btn-diag').addEventListener('click', () => { renderDiag(); goTo('view-diag'); });
+  $('#diag-server').addEventListener('click', diagCheckServer);
+  $('#diag-login').addEventListener('click', diagCheckLogin);
+  $('#diag-reset').addEventListener('click', diagReset);
   $('#btn-logout').addEventListener('click', doLogout);
 
   // главная
