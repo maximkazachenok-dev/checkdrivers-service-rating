@@ -1,7 +1,7 @@
 {
-  "name": "PRIMUM — Оценка автосервисов",
+  "name": "PRIMUM — приложение для сотрудников",
   "short_name": "PRIMUM",
-  "description": "Опрос водителей о качестве ремонта в автосервисах PRIMUM",
+  "description": "Оценка качества ремонта, ящик обращений и материалы по эко-вождению для сотрудников PRIMUM",
   "lang": "ru",
   "dir": "ltr",
   "start_url": "./index.html",
@@ -11,8 +11,23 @@
   "background_color": "#2C3136",
   "theme_color": "#2C3136",
   "icons": [
-    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "./icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

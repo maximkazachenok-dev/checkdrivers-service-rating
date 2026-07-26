@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.2.1',
+  APP_VERSION: '2.3.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -65,6 +65,56 @@ async function sha256hex(text) {
   if (!(window.crypto && window.crypto.subtle)) throw new Error('no_crypto');
   const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* ---------- Транспорт запросов к серверу ----------
+   Apps Script на GET отвечает редиректом на script.googleusercontent.com.
+   Safari на iPhone блокирует такой перенаправленный кросс-доменный запрос,
+   тогда как Chrome его пропускает — отсюда «работает на ПК, не работает на телефоне».
+   Поэтому: сначала обычный fetch (быстро и с понятными ошибками), а при отказе —
+   загрузка через <script> (JSONP), на которую правила CORS не распространяются. */
+
+function buildQuery(params) {
+  return Object.keys(params)
+    .map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
+    .join('&');
+}
+
+function jsonpGet(params, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const cb = 'primumCb' + Date.now().toString(36) + Math.floor(Math.random() * 1e6);
+    const script = document.createElement('script');
+    let finished = false;
+    const cleanup = () => {
+      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    };
+    const timer = setTimeout(() => {
+      if (!finished) { finished = true; cleanup(); reject(new Error('jsonp: превышено время ожидания')); }
+    }, timeoutMs || 15000);
+    window[cb] = (data) => { finished = true; cleanup(); resolve(data); };
+    script.onerror = () => {
+      if (!finished) { finished = true; cleanup(); reject(new Error('jsonp: запрос не выполнен')); }
+    };
+    script.src = CONFIG.API_URL + '?' + buildQuery(params) + '&callback=' + cb + '&t=' + Date.now();
+    document.head.appendChild(script);
+  });
+}
+
+/** GET к серверу: fetch, при неудаче — JSONP. Возвращает разобранный ответ. */
+async function apiGet(params, opts) {
+  const o = opts || {};
+  const url = CONFIG.API_URL + '?' + buildQuery(params) + '&t=' + Date.now();
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (e) {
+    if (o.noFallback) throw e;
+    console.warn('[PRIMUM] Прямой запрос не прошёл (' + e.message + '), пробуем JSONP');
+    return await jsonpGet(params, o.timeout);
+  }
 }
 
 /* ---------- Состояние ---------- */
@@ -211,10 +261,7 @@ async function loadBootstrap() {
     const attempts = state.bootLoaded ? 1 : 3;   // без кэша настойчивее
     for (let a = 1; a <= attempts; a++) {
       try {
-        const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) +
-                    '&t=' + Date.now();
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await apiGet({ token: CONFIG.SHARED_TOKEN });
         if (data.ok && Array.isArray(data.employees)) {
           state.employees = data.employees;
           state.engineers = data.engineers || [];
@@ -522,13 +569,7 @@ async function doLogin() {
   btn.textContent = 'Проверка...';
   try {
     const hash = await sha256hex(pwd);
-    const url = CONFIG.API_URL +
-      '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) +
-      '&login=' + encodeURIComponent(fio) +
-      '&pwd=' + encodeURIComponent(hash) +
-      '&t=' + Date.now();
-    const res = await fetch(url);
-    const data = await res.json();
+    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash });
     if (data.ok && data.authorized) {
       state.session = { fio: data.fio || fio, at: Date.now() };
       await idbPut('kv', state.session, 'session').catch(() => {});
@@ -610,10 +651,7 @@ async function sendPayload(payload) {
   });
   // Доставку подтверждаем отдельным GET: он проходит CORS нормально.
   await new Promise((r) => setTimeout(r, 1200));
-  const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) +
-              '&check_id=' + encodeURIComponent(payload.client_id) + '&t=' + Date.now();
-  const res = await fetch(url);
-  const data = await res.json();
+  const data = await apiGet({ token: CONFIG.SHARED_TOKEN, check_id: payload.client_id });
   if (!data.delivered) throw new Error('not_delivered');
   return { ok: true };
 }
@@ -722,19 +760,37 @@ function diagOut(text) {
 }
 
 async function diagCheckServer() {
-  diagOut('Запрос к серверу...');
-  const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) + '&t=' + Date.now();
-  const started = Date.now();
+  diagOut('Проверка...');
+  const lines = [];
+  const params = { token: CONFIG.SHARED_TOKEN };
+
+  // Канал 1 — обычный запрос
+  let t0 = Date.now();
   try {
-    const res = await fetch(url);
+    const res = await fetch(CONFIG.API_URL + '?' + buildQuery(params) + '&t=' + Date.now());
     const text = await res.text();
-    const ms = Date.now() - started;
-    diagOut('HTTP ' + res.status + ' за ' + ms + ' мс\n\n' + text.slice(0, 600));
+    lines.push('Прямой запрос: HTTP ' + res.status + ' за ' + (Date.now() - t0) + ' мс');
+    lines.push(text.slice(0, 300));
   } catch (e) {
-    diagOut('Запрос не выполнен: ' + e.message +
-            '\n\nВозможные причины: нет интернета, неверный адрес сервера,' +
-            ' развёртывание Apps Script закрыто для всех.');
+    lines.push('Прямой запрос: НЕ ПРОШЁЛ (' + e.message + ') за ' + (Date.now() - t0) + ' мс');
+    lines.push('Так ведёт себя Safari на iPhone — сработает запасной канал.');
   }
+
+  // Канал 2 — JSONP
+  lines.push('');
+  t0 = Date.now();
+  try {
+    const data = await jsonpGet(params, 15000);
+    lines.push('Запасной канал (JSONP): ОК за ' + (Date.now() - t0) + ' мс');
+    lines.push('сотрудников: ' + ((data.employees || []).length) +
+               ', инженеров: ' + ((data.engineers || []).length) +
+               ', тягачей: ' + ((data.tractors || []).length));
+    if (data.error) lines.push('ошибка сервера: ' + data.error);
+  } catch (e) {
+    lines.push('Запасной канал (JSONP): НЕ ПРОШЁЛ (' + e.message + ')');
+    lines.push('Проверьте, что Code.gs обновлён и создана НОВАЯ версия развёртывания.');
+  }
+  diagOut(lines.join('\n'));
 }
 
 /** Показывает сырой ответ сервера на введённые ФИО и пароль — видно,
@@ -752,16 +808,13 @@ async function diagCheckLogin() {
   try {
     const hash = await sha256hex(pwd);
     const fio = matchEmployee(fioRaw) || fioRaw;
-    const url = CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.SHARED_TOKEN) +
-                '&login=' + encodeURIComponent(fio) + '&pwd=' + encodeURIComponent(hash) +
-                '&t=' + Date.now();
-    const res = await fetch(url);
-    const text = await res.text();
+    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash });
     diagOut('ФИО передано: ' + fio +
             '\nДлина пароля: ' + pwd.length + ' символов' +
             (changed ? '\nВНИМАНИЕ: клавиатура подставила спецсимволы, они исправлены' : '') +
             '\nФИО найдено в списке: ' + (matchEmployee(fioRaw) ? 'да' : 'НЕТ') +
-            '\n\nОтвет сервера:\n' + text.slice(0, 400));
+            '\nХеш (первые 12): ' + hash.slice(0, 12) +
+            '\n\nОтвет сервера:\n' + JSON.stringify(data));
   } catch (e) {
     diagOut('Ошибка: ' + e.message);
   }
