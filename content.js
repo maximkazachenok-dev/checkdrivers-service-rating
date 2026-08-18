@@ -110,3 +110,44 @@ window.ECO_CONTENT = {
     ]
   }
 };
+
+/* PRIMUM — раздел «Новым сотрудникам».
+ * Пока разделы не наполнены: slides = null, приложение показывает заглушку
+ * «Раздел заполняется». Чтобы наполнить раздел, замените null на массив
+ * слайдов того же вида, что в ECO_CONTENT.instruction:
+ *   slides: [ { title: 'Заголовок', items: ['пункт 1', 'пункт 2'] } ]
+ * Править app.js при этом не нужно — меню и экраны строятся из этого файла.
+ * После правки поднимите версию кэша в sw.js. */
+
+window.NEWBIE_CONTENT = [
+  {
+    id: 'departure',
+    title: 'Порядок действий для выезда в рейс',
+    subtitle: '',
+    slides: null
+  },
+  {
+    id: 'return',
+    title: 'Порядок действий при возвращении из рейса',
+    subtitle: '',
+    slides: null
+  },
+  {
+    id: 'adr',
+    title: 'Перечень комплекта АДР',
+    subtitle: '',
+    slides: null
+  },
+  {
+    id: 'tmc',
+    title: 'Комплектность ТМЦ',
+    subtitle: '',
+    slides: null
+  },
+  {
+    id: 'precheck',
+    title: 'Порядок проверки ТС перед выездом',
+    subtitle: '',
+    slides: null
+  }
+];

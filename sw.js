@@ -1,5 +1,5 @@
 /* PRIMUM service worker — офлайн-оболочка + фоновая досылка ответов. */
-const CACHE = 'primum-shell-v11';
+const CACHE = 'primum-shell-v14';
 const SHELL = [
   './',
   './index.html',

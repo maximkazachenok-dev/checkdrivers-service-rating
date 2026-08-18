@@ -66,14 +66,25 @@
     font-size:13px;line-height:1.5;color:var(--red-deep);background:#FDEBEC;
     border:1px solid #F5C4C8;border-radius:10px;padding:11px 13px;margin-bottom:20px;
   }
+  .banner.banner-info{
+    color:var(--graphite);background:var(--paper);border-color:var(--line);
+  }
+  .banner.banner-info span:before{
+    content:'';display:inline-block;width:13px;height:13px;margin-right:8px;vertical-align:-2px;
+    border-radius:50%;border:2px solid var(--line);border-top-color:var(--graphite);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
 
   /* ---------- inputs ---------- */
   .ac{position:relative;margin-bottom:18px}
   .tf,.pwd{border:1.5px solid var(--line);border-radius:12px;background:#fff;display:flex;align-items:stretch}
   .tf:focus-within,.pwd:focus-within{border-color:var(--graphite)}
   .tf.bad,.pwd.bad,.plate.bad{border-color:var(--red)}
+  /* 16px — нижняя граница, при которой iOS не увеличивает масштаб при фокусе.
+     Меньше ставить нельзя: экран «прыгает» и обратно сам не отдаляется. */
   .tf input,.pwd input{
-    flex:1;border:0;outline:0;padding:14px;font-family:'Inter';font-size:15px;
+    flex:1;border:0;outline:0;padding:14px;font-family:'Inter';font-size:16px;
     color:var(--ink);background:transparent;min-width:0;
   }
   .pwd button{
@@ -83,10 +94,6 @@
   }
   .plate{display:flex;align-items:stretch;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
   .plate:focus-within{border-color:var(--graphite)}
-  .flag{
-    display:flex;align-items:center;justify-content:center;min-width:44px;
-    background:var(--graphite-deep);color:#fff;font-family:'Oswald';font-size:13px;letter-spacing:.05em;
-  }
   .input{
     flex:1;border:0;outline:0;padding:14px;font-family:'Oswald';font-size:17px;
     letter-spacing:.03em;color:var(--ink);background:transparent;min-width:0;
@@ -108,12 +115,26 @@
 
   .select{
     width:100%;border:1.5px solid var(--line);border-radius:12px;background:#fff;
-    padding:14px;font-family:'Inter';font-size:15px;color:var(--ink);
+    padding:14px;font-family:'Inter';font-size:16px;color:var(--ink);
     appearance:none;-webkit-appearance:none;margin-bottom:22px;
     background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238A8F94' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat:no-repeat;background-position:right 16px center;
   }
   .select:focus{outline:0;border-color:var(--graphite)}
+
+  .chk{
+    display:flex;align-items:center;gap:10px;margin:-4px 0 2px;cursor:pointer;
+    font-size:13.5px;line-height:1.4;color:var(--graphite);
+  }
+  .chk input{width:19px;height:19px;flex-shrink:0;accent-color:var(--red)}
+
+  /* ---------- стартовая заставка ---------- */
+  .boot{display:flex;flex-direction:column;align-items:center;gap:14px;margin:auto}
+  .boot-spin{
+    width:26px;height:26px;border-radius:50%;border:3px solid var(--line);
+    border-top-color:var(--red);animation:spin .8s linear infinite;
+  }
+  .boot-txt{font-size:13px;color:var(--muted);letter-spacing:.02em}
 
   /* ---------- home tiles ---------- */
   .home-greet{font-family:'Oswald';font-size:21px;color:var(--graphite-deep);line-height:1.2}
@@ -134,10 +155,8 @@
     font-family:'Oswald';font-size:14px;line-height:1.3;color:var(--graphite-deep);
     letter-spacing:.01em;font-weight:500;
   }
-  .tile.primary{background:var(--graphite-deep);border-color:var(--graphite-deep);
-    box-shadow:0 14px 30px -18px rgba(26,29,32,.55)}
-  .tile.primary .tile-t{color:#fff}
-  .tile.primary .tile-ic{background:rgba(255,255,255,.1)}
+  /* Широкая плитка на всю строку — когда плиток нечётное число. */
+  .tile.wide{grid-column:1 / -1;min-height:auto;flex-direction:row;align-items:center;gap:14px}
   .soon{
     position:absolute;top:11px;right:11px;font-size:9px;letter-spacing:.08em;
     text-transform:uppercase;color:var(--muted);background:var(--paper);
@@ -159,7 +178,7 @@
   .scale-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:22px}
   .textarea{
     width:100%;min-height:92px;border:1.5px solid var(--line);border-radius:12px;
-    padding:13px 14px;font-family:'Inter';font-size:14px;line-height:1.5;color:var(--ink);
+    padding:13px 14px;font-family:'Inter';font-size:16px;line-height:1.5;color:var(--ink);
     resize:vertical;background:#fff;margin-bottom:8px;
   }
   .textarea:focus{outline:0;border-color:var(--graphite)}
@@ -204,8 +223,11 @@
   }
   .mrow-ic svg{width:20px;height:20px}
   .mrow-txt{flex:1;min-width:0}
-  .mrow-t{font-family:'Oswald';font-size:15px;font-weight:500;color:var(--graphite-deep);line-height:1.25}
-  .mrow-s{font-size:12px;color:var(--muted);margin-top:2px}
+  /* display:block обязателен: это span-ы, и без него название и подпись
+     склеиваются в одну строку, когда название длинное. */
+  .mrow-t{display:block;font-family:'Oswald';font-size:15px;font-weight:500;color:var(--graphite-deep);line-height:1.25}
+  .mrow-s{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+  .mrow-s:empty{display:none}
   .mrow-arrow{color:var(--muted);font-size:16px;flex-shrink:0}
 
   /* ---------- карусель ---------- */
@@ -237,6 +259,8 @@
     border-radius:50%;background:var(--red);
   }
   .cr-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}
+  /* как и у .navdots: display у класса иначе перебивает атрибут hidden */
+  .cr-bar[hidden],.carousel[hidden]{display:none}
   .cr-nav{
     width:46px;height:46px;border-radius:13px;border:1.5px solid var(--line);background:#fff;
     color:var(--graphite);font-size:19px;cursor:pointer;flex-shrink:0;
@@ -244,6 +268,53 @@
   .cr-nav:disabled{opacity:.35;cursor:not-allowed}
   .cr-count{font-family:'Oswald';font-size:14px;color:var(--muted);letter-spacing:.06em}
   .cr-hint{font-size:11.5px;color:var(--muted);text-align:center;margin-top:10px}
+
+  /* ---------- приём/сдача ТС ---------- */
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:18px}
+  .seg-btn{
+    border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:14px 8px;
+    font-family:'Oswald';font-size:15px;letter-spacing:.03em;color:var(--graphite);cursor:pointer;
+  }
+  .seg-btn.on{background:var(--red);border-color:var(--red);color:#fff}
+  .ph-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .ph-count{font-family:'Oswald';font-size:14px;color:var(--muted);letter-spacing:.06em}
+  .ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
+  .ph-grid:empty{display:none}
+  .ph{
+    position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;
+    border:1px solid var(--line);background:#fff;
+  }
+  .ph img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+  .ph-del{
+    position:absolute;top:3px;right:3px;width:21px;height:21px;padding:0;border:0;
+    border-radius:50%;background:rgba(26,29,32,.72);color:#fff;font-size:11px;
+    line-height:21px;cursor:pointer;
+  }
+
+  /* ---------- заглушка ненаполненного раздела ---------- */
+  .empty{
+    background:#fff;border:1.5px solid var(--line);border-radius:16px;
+    padding:28px 20px;text-align:center;
+  }
+  .empty-t{font-family:'Oswald';font-size:17px;color:var(--graphite-deep);margin-bottom:9px}
+  .empty-s{font-size:13.5px;line-height:1.55;color:#5b6167}
+
+  /* ---------- диагностика ---------- */
+  .diag{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:14px}
+  .drow{
+    display:flex;justify-content:space-between;gap:12px;padding:9px 0;
+    border-bottom:1px solid var(--paper);font-size:13px;
+  }
+  .drow:last-child{border-bottom:0}
+  .dk{color:var(--muted);flex-shrink:0}
+  .dv{color:var(--ink);text-align:right;word-break:break-word}
+  .dv.good{color:#1F7A3D}
+  .dv.bad{color:var(--red)}
+  .diag-out{
+    background:var(--ink);color:#E8EAEC;border-radius:12px;padding:13px;
+    font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.5;
+    white-space:pre-wrap;word-break:break-word;margin-bottom:16px;max-height:260px;overflow:auto;
+  }
 
   /* ---------- полноэкранный просмотр ---------- */
   .zoom{position:fixed;inset:0;z-index:120;background:rgba(26,29,32,.97);display:flex;flex-direction:column}
@@ -261,10 +332,12 @@
   .zoom-scroll img{max-width:none;height:auto;display:block}
 
   .navdots{display:flex;gap:7px;justify-content:center;padding:16px 0 calc(env(safe-area-inset-bottom) + 16px)}
+  /* display:flex у класса перебивал бы атрибут hidden — точки висели бы на всех экранах */
+  .navdots[hidden]{display:none}
   .navdots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block}
   .navdots i.on{background:var(--red);width:20px;border-radius:100px}
 
-  @media (prefers-reduced-motion: reduce){*{transition:none !important}}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important}.banner-info span:before{animation:none}}
 </style>
 </head>
 <body>
@@ -278,8 +351,18 @@
 
   <div class="body">
 
+    <!-- ЭКРАН: заставка. Активен при запуске, пока не проверена сессия.
+         Раньше сразу показывался экран входа, и восстановление сессии
+         перебрасывало пользователя в кабинет прямо во время набора фамилии. -->
+    <section class="view active center" id="view-boot">
+      <div class="boot">
+        <span class="boot-spin" aria-hidden="true"></span>
+        <p class="boot-txt">Загрузка...</p>
+      </div>
+    </section>
+
     <!-- ЭКРАН: вход -->
-    <section class="view active" id="view-login">
+    <section class="view" id="view-login">
       <div class="h1">Вход в систему</div>
       <p class="lead">Введите фамилию и выберите себя из списка, затем укажите пароль.</p>
       <p class="banner" id="boot-status" hidden></p>
@@ -305,6 +388,11 @@
         <p class="err" id="err-login" role="alert" hidden></p>
       </div>
 
+      <label class="chk" for="in-remember">
+        <input type="checkbox" id="in-remember">
+        <span>Запомнить меня на этом устройстве</span>
+      </label>
+
       <div class="spacer"></div>
       <button class="btn btn-primary" id="btn-login" disabled>Войти</button>
       <p class="fine">Доступ только для сотрудников PRIMUM.</p>
@@ -317,6 +405,12 @@
       <p class="lead">Экран для проверки связи и настроек. Покажите его администратору, если приложение работает неправильно.</p>
       <div class="diag" id="diag-list"></div>
       <div class="diag-out" id="diag-out" hidden></div>
+      <div class="field-label">Адрес серверного скрипта</div>
+      <div class="tf" style="margin-bottom:10px">
+        <input id="diag-url" autocomplete="off" autocapitalize="none" autocorrect="off"
+               spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <button class="btn btn-ghost" id="diag-url-save">Применить адрес и проверить</button>
       <button class="btn btn-ghost" id="diag-server">Проверить связь с сервером</button>
       <button class="btn btn-ghost" id="diag-login">Проверить введённый пароль</button>
       <div class="spacer"></div>
@@ -331,7 +425,7 @@
       <p class="home-sub">Выберите раздел</p>
 
       <div class="tiles">
-        <button class="tile primary" id="tile-rating">
+        <button class="tile" id="tile-rating">
           <span class="tile-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" stroke-linejoin="round">
@@ -365,7 +459,6 @@
         </button>
 
         <button class="tile" id="tile-newbie">
-          <span class="soon">Скоро</span>
           <span class="tile-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" stroke-linejoin="round">
@@ -374,6 +467,17 @@
             </svg>
           </span>
           <span class="tile-t">Новым сотрудникам</span>
+        </button>
+
+        <button class="tile wide" id="tile-handover">
+          <span class="tile-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7h11v9H3z"/><path d="M14 10h3.6l2.4 3v3h-6z"/>
+              <circle cx="7" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/>
+            </svg>
+          </span>
+          <span class="tile-t">Прием/сдача ТС</span>
         </button>
       </div>
 
@@ -390,7 +494,6 @@
       <div class="ac">
         <div class="field-label">Номер тягача <span class="req">*</span></div>
         <div class="plate">
-          <span class="flag">BY</span>
           <input class="input" id="in-tractor" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
         </div>
@@ -401,7 +504,6 @@
       <div class="ac">
         <div class="field-label">Номер прицепа</div>
         <div class="plate">
-          <span class="flag">BY</span>
           <input class="input" id="in-trailer" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер, если есть">
         </div>
@@ -533,7 +635,6 @@
       <div class="ac">
         <div class="field-label">Гос. номер автомобиля <span class="req">*</span></div>
         <div class="plate">
-          <span class="flag">BY</span>
           <input class="input" id="in-vehicle" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
         </div>
@@ -559,6 +660,83 @@
 
       <div class="spacer"></div>
       <button class="btn btn-primary" id="btn-appeal-send" disabled>Отправить обращение</button>
+    </section>
+
+    <!-- ЭКРАН: меню раздела «Новым сотрудникам» -->
+    <section class="view" id="view-newbie">
+      <div class="h1">Новым сотрудникам</div>
+      <p class="lead">Порядок действий и памятки для водителей PRIMUM.</p>
+      <div class="menu" id="newbie-menu"></div>
+      <div class="spacer"></div>
+    </section>
+
+    <!-- ЭКРАН: подраздел «Новым сотрудникам» (заглушка или текстовая карусель) -->
+    <section class="view" id="view-newbie-item">
+      <div class="h1" id="newbie-title"></div>
+      <div id="newbie-empty" hidden>
+        <div class="empty">
+          <div class="empty-t">Раздел заполняется</div>
+          <p class="empty-s">Материалы этого раздела появятся позже.<br>Следите за обновлениями приложения.</p>
+        </div>
+      </div>
+      <div class="carousel" id="nb-track" hidden></div>
+      <div class="cr-bar" id="nb-bar" hidden>
+        <button class="cr-nav" id="nb-prev" aria-label="Назад">&#8592;</button>
+        <span class="cr-count" id="nb-count">1 / 1</span>
+        <button class="cr-nav" id="nb-next" aria-label="Вперёд">&#8594;</button>
+      </div>
+      <div class="spacer"></div>
+    </section>
+
+    <!-- ЭКРАН: приём/сдача ТС -->
+    <section class="view" id="view-handover">
+      <div class="h1">Прием/сдача ТС</div>
+      <p class="lead">Сфотографируйте тягач и полуприцеп, опишите замечания и отправьте отчёт.</p>
+      <p class="banner" id="handover-status" hidden></p>
+
+      <div class="field-label">Операция <span class="req">*</span></div>
+      <div class="seg" id="ho-kind">
+        <button type="button" class="seg-btn" data-kind="Приём">Приём ТС</button>
+        <button type="button" class="seg-btn" data-kind="Сдача">Сдача ТС</button>
+      </div>
+
+      <div class="ac">
+        <div class="field-label">Номер тягача <span class="req">*</span></div>
+        <div class="plate">
+          <input class="input" id="in-ho-tractor" autocomplete="off" autocapitalize="characters"
+                 autocorrect="off" spellcheck="false" role="combobox"
+                 aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
+        </div>
+        <ul class="aclist" id="list-ho-tractor" role="listbox" hidden></ul>
+        <p class="err" id="err-ho-tractor" role="alert" hidden></p>
+      </div>
+
+      <div class="ac">
+        <div class="field-label">Номер полуприцепа</div>
+        <div class="plate">
+          <input class="input" id="in-ho-trailer" autocomplete="off" autocapitalize="characters"
+                 autocorrect="off" spellcheck="false" role="combobox"
+                 aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер, если есть">
+        </div>
+        <ul class="aclist" id="list-ho-trailer" role="listbox" hidden></ul>
+        <p class="err" id="err-ho-trailer" role="alert" hidden></p>
+      </div>
+
+      <div class="ph-head">
+        <div class="field-label" style="margin:0">Фото ТС</div>
+        <span class="ph-count" id="ho-count">0 / 10</span>
+      </div>
+      <input type="file" id="ho-file" accept="image/*" capture="environment" multiple hidden>
+      <button type="button" class="btn btn-ghost" id="ho-shot">Сделать фото</button>
+      <div class="ph-grid" id="ho-photos"></div>
+      <p class="hint" id="ho-hint">До 10 снимков тягача и полуприцепа. Нажмите на снимок, чтобы увеличить, крестик — удалить.</p>
+
+      <div class="field-label" style="margin-top:20px">Замечания и неисправности</div>
+      <textarea class="textarea" id="ho-notes"
+                placeholder="Опишите повреждения, замечания и неисправности"></textarea>
+
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="btn-ho-send" disabled>Отправить отчёт</button>
     </section>
 
     <!-- ЭКРАН: спасибо -->
