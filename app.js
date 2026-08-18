@@ -2,9 +2,9 @@
  * Настройка: API_URL (URL веб-приложения Apps Script) и тот же SHARED_TOKEN, что в Code.gs. */
 
 const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbxTGqd1D9OZnYpKFceaQCfKCNT2U1N8oTFYa0uMTC43bxINxHnvvlygMDLKNyHwHXtpXw/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.4.0',
+  APP_VERSION: '2.4.1',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -743,7 +743,10 @@ function uuid() {
 async function sendPayload(payload) {
   // Apps Script на POST отвечает редиректом на script.googleusercontent.com без
   // CORS-заголовков, поэтому ответ прочитать нельзя — шлём в no-cors.
-  await fetch(CONFIG.API_URL, {
+  // apiUrl(), а не CONFIG.API_URL: иначе при адресе, заданном через «Диагностику»,
+  // запись уходила бы на старый сервер, а подтверждение спрашивалось у нового —
+  // и каждая отправка заканчивалась бы «сервер не подтвердил запись».
+  await fetch(apiUrl(), {
     method: 'POST',
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -838,8 +841,9 @@ async function renderDiag() {
 
   add('Адрес сервера', apiUrl().replace('https://script.google.com/macros/s/', '...').slice(0, 28),
       apiUrlOverride ? 'good' : '');
-  add('Версия серверной части', state.serverVersion || 'не сообщена (старая)',
-      state.serverVersion ? 'good' : 'bad');
+  // Признак исправности — загруженные справочники, а не поле api_version:
+  // рабочее развёртывание может его не сообщать, и красная строка сбивала с толку.
+  add('Версия серверной части', state.serverVersion || 'не сообщена', state.serverVersion ? 'good' : '');
   if (state.serverOutdated) add('ВНИМАНИЕ', 'развёртывание устарело', 'bad');
 
   const ok = state.bootLoaded && state.employees.length > 0;
@@ -904,7 +908,7 @@ async function diagCheckServer() {
   // Канал 1 — обычный запрос
   let t0 = Date.now();
   try {
-    const res = await fetch(CONFIG.API_URL + '?' + buildQuery(params) + '&t=' + Date.now());
+    const res = await fetch(apiUrl() + '?' + buildQuery(params) + '&t=' + Date.now());
     const text = await res.text();
     lines.push('Прямой запрос: HTTP ' + res.status + ' за ' + (Date.now() - t0) + ' мс');
     lines.push(text.slice(0, 300));
