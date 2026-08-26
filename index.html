@@ -163,6 +163,37 @@
     padding:3px 7px;border-radius:100px;font-weight:600;
   }
 
+  /* Закреплённые за водителем ТС: на главной и на экранах, где номера
+     раньше вводились руками. */
+  .home-plate{
+    /* align-self обязателен: .view — колоночный флекс, иначе плашка
+       растянулась бы на всю ширину экрана вместо ширины по номерам */
+    display:inline-flex;align-self:flex-start;align-items:center;gap:9px;margin-top:9px;padding:8px 13px;
+    background:#fff;border:1.5px solid var(--line);border-radius:10px;
+    font-family:'Oswald';font-size:15px;letter-spacing:.04em;color:var(--graphite-deep);
+  }
+  .home-plate[hidden]{display:none}
+  .home-plate .sep{color:var(--line)}
+  .home-plate .none{font-family:'Inter';font-size:13px;letter-spacing:0;color:var(--muted)}
+  .assigned{
+    display:flex;align-items:center;gap:13px;padding:13px 15px;margin-bottom:20px;
+    background:#fff;border:1.5px solid var(--line);border-radius:12px;
+  }
+  .assigned[hidden]{display:none}
+  .assigned-ic{
+    width:36px;height:36px;border-radius:10px;background:var(--paper);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;color:var(--red);
+  }
+  .assigned-ic svg{width:19px;height:19px}
+  .assigned-s{
+    display:block;font-size:11px;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:3px;
+  }
+  .assigned-t{
+    display:block;font-family:'Oswald';font-size:15px;letter-spacing:.04em;
+    color:var(--graphite-deep);line-height:1.3;
+  }
+
   /* ---------- rating ---------- */
   .rating-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px}
   .rating-val{font-family:'Oswald';font-size:34px;font-weight:600;color:var(--red);line-height:1}
@@ -335,6 +366,7 @@
   /* display:flex у класса перебивал бы атрибут hidden — точки висели бы на всех экранах */
   .navdots[hidden]{display:none}
   .navdots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block}
+  .navdots i[hidden]{display:none}
   .navdots i.on{background:var(--red);width:20px;border-radius:100px}
 
   @media (prefers-reduced-motion: reduce){*{transition:none !important}.banner-info span:before{animation:none}}
@@ -422,6 +454,7 @@
     <section class="view" id="view-home">
       <div class="spacer"></div>
       <div class="home-greet" id="greet">Здравствуйте</div>
+      <div class="home-plate" id="home-plate" hidden></div>
       <p class="home-sub">Выберите раздел</p>
 
       <div class="tiles">
@@ -518,6 +551,20 @@
 
     <!-- ЭКРАН: оценка (шаг 2 опроса) -->
     <section class="view" id="view-rating">
+      <div class="assigned" id="rating-vehicle" hidden>
+        <span class="assigned-ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7h11v9H3z"/><path d="M14 10h3.6l2.4 3v3h-6z"/>
+            <circle cx="7" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/>
+          </svg>
+        </span>
+        <span>
+          <span class="assigned-s">Ваше транспортное средство</span>
+          <span class="assigned-t" id="rating-vehicle-t"></span>
+        </span>
+      </div>
+
       <div class="field-label">Автосервис <span class="req">*</span></div>
       <select class="select" id="in-service" required>
         <option value="" disabled selected hidden>Выберите автосервис</option>
@@ -632,7 +679,21 @@
         <p class="err" id="err-eng" role="alert" hidden></p>
       </div>
 
-      <div class="ac">
+      <div class="assigned" id="appeal-vehicle" hidden>
+        <span class="assigned-ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7h11v9H3z"/><path d="M14 10h3.6l2.4 3v3h-6z"/>
+            <circle cx="7" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/>
+          </svg>
+        </span>
+        <span>
+          <span class="assigned-s">Ваш автомобиль</span>
+          <span class="assigned-t" id="appeal-vehicle-t"></span>
+        </span>
+      </div>
+
+      <div class="ac" id="wrap-vehicle">
         <div class="field-label">Гос. номер автомобиля <span class="req">*</span></div>
         <div class="plate">
           <input class="input" id="in-vehicle" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"

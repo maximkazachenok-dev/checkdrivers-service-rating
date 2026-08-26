@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.4.1',
+  APP_VERSION: '2.5.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -156,6 +156,9 @@ const state = {
   session: null,            // { fio }
   // опрос по ремонту
   tractor: '', trailer: '', service: '', rating: null, comment: '',
+  // номера подставлены из закрепления, а не введены водителем
+  vehicleAssigned: false,
+  surveyDots: 0, surveyOf: 0,
   // обращение
   engineer: '', vehicle: '', topic: '', topicCustom: '', message: '',
   // приём/сдача ТС
@@ -251,9 +254,9 @@ const SCREENS = {
   'view-eco':     { sub: 'Эко-вождение',    back: 'view-home',    dots: 0 },
   'view-eco-media': { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
   'view-eco-text':  { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
-  'view-vehicle': { sub: 'Оценка ремонта',  back: 'view-home',    dots: 1 },
-  'view-rating':  { sub: 'Оценка ремонта',  back: 'view-vehicle', dots: 2 },
-  'view-thanks':  { sub: 'Оценка ремонта',  back: null,           dots: 3 },
+  'view-vehicle': { sub: 'Оценка ремонта',  back: 'view-home',    dots: 1, of: 3 },
+  'view-rating':  { sub: 'Оценка ремонта',  back: 'view-vehicle', dots: 2, of: 3 },
+  'view-thanks':  { sub: 'Оценка ремонта',  back: null,           dots: 0, of: 0 },
   'view-newbie':      { sub: 'Новым сотрудникам', back: 'view-home',   dots: 0 },
   'view-newbie-item': { sub: 'Новым сотрудникам', back: 'view-newbie', dots: 0 },
   'view-handover':    { sub: 'Прием/сдача ТС',    back: 'view-home',   dots: 0 }
@@ -271,7 +274,12 @@ function goTo(id) {
   if (!dots) return;
   if (meta.dots) {
     dots.hidden = false;
-    dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === meta.dots - 1));
+    // Шагов может быть три (номера вводятся вручную) или два (ТС закреплено).
+    const total = meta.of || 3;
+    dots.querySelectorAll('i').forEach((d, i) => {
+      d.hidden = i >= total;
+      d.classList.toggle('on', i === meta.dots - 1);
+    });
   } else {
     dots.hidden = true;
   }
@@ -395,7 +403,8 @@ function updateAppealStatus() {
   if (!banner || !$('#in-eng') || !$('#in-topic')) return;
   const problems = [];
   if (!state.engineers.length) problems.push('список инженеров');
-  if (!state.fleet.tractors.length) problems.push('автопарк');
+  // Автопарк нужен только тогда, когда номер вводится вручную.
+  if (!state.fleet.tractors.length && !state.vehicleAssigned) problems.push('автопарк');
   if (!state.topics.length) problems.push('пункты обращения');
   const ready = problems.length === 0;
   $('#in-eng').disabled = !ready;
@@ -615,10 +624,14 @@ function validateAppeal(showErrors) {
   const engRaw = state.engineer.trim();
   const vehRaw = state.vehicle.trim();
   const engOk = !!matchEngineer(engRaw);
-  const vehOk = !!matchVehicle(vehRaw);
-  if (showErrors) {
+  // Закреплённый номер сверять с автопарком незачем: его выдал сервер, а
+  // список автопарка на устройстве может быть ещё не загружен.
+  const vehOk = state.vehicleAssigned ? !!vehRaw : !!matchVehicle(vehRaw);
+  if (showErrors && !state.vehicleAssigned) {
     setFieldError('#in-eng', '#err-eng', engRaw && !engOk ? 'Инженер не найден в списке' : '');
     setFieldError('#in-vehicle', '#err-vehicle', vehRaw && !vehOk ? 'Номер не найден в автопарке' : '');
+  } else if (showErrors) {
+    setFieldError('#in-eng', '#err-eng', engRaw && !engOk ? 'Инженер не найден в списке' : '');
   }
   const customNeeded = state.topic === 'Свой вариант';
   const customOk = !customNeeded || state.topicCustom.trim().length > 0;
@@ -644,6 +657,50 @@ function validateRating() {
   $('#btn-submit').disabled = !ok;
 }
 
+/* ---------- Закреплённые за водителем ТС ----------
+   Номера задаются в таблице (лист Employees, колонки tractor и trailer) и
+   приходят при входе. Водитель их не вводит: приложение подставляет само. */
+
+function assignedTractor() { return (state.session && state.session.tractor) || ''; }
+function assignedTrailer() { return (state.session && state.session.trailer) || ''; }
+
+/** Номера на главной: «AB 1234-7 / A 1120 C-7». */
+function paintAssignment() {
+  const box = $('#home-plate');
+  if (!box) return;
+  const t = assignedTractor(), tr = assignedTrailer();
+  if (!t && !tr) {
+    // Сотруднику ТС не закреплено — номера он вводит вручную, как раньше.
+    box.innerHTML = '<span class="none">ТС не закреплено</span>';
+    box.hidden = false;
+    return;
+  }
+  box.innerHTML = escapeHtml(t || '—') +
+                  (tr ? ' <span class="sep">/</span> ' + escapeHtml(tr) : '');
+  box.hidden = false;
+}
+
+/**
+ * Обновление закрепления при запуске: машину могли поменять в таблице, и
+ * повторный вход ради этого требовать незачем. Пароль для запроса не нужен —
+ * возвращаются только номера.
+ */
+async function refreshAssignment() {
+  if (!state.session || !navigator.onLine) return;
+  try {
+    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, assign: state.session.fio });
+    // Развёртывание старой версии не знает про assign и отвечает справочниками —
+    // такой ответ распознаём по отсутствию fio и оставляем закрепление как есть.
+    if (!data || !data.ok || !data.fio || typeof data.tractor !== 'string') return;
+    state.session.tractor = data.tractor;
+    state.session.trailer = data.trailer || '';
+    if (state.session.remember) await idbPut('kv', state.session, 'session').catch(() => {});
+    paintAssignment();
+  } catch (e) {
+    console.warn('[PRIMUM] Закрепление ТС не обновлено:', e.message);
+  }
+}
+
 /* ---------- Вход ---------- */
 async function doLogin() {
   const btn = $('#btn-login');
@@ -667,7 +724,8 @@ async function doLogin() {
     const hash = await sha256hex(pwd);
     const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash });
     if (data.ok && data.authorized) {
-      state.session = { fio: data.fio || fio, at: Date.now(), remember: remember };
+      state.session = { fio: data.fio || fio, at: Date.now(), remember: remember,
+                        tractor: data.tractor || '', trailer: data.trailer || '' };
       // Без галочки сессия живёт только в памяти: закрыли приложение — нужен пароль.
       if (remember) await idbPut('kv', state.session, 'session').catch(() => {});
       else await idbDel('kv', 'session').catch(() => {});
@@ -690,6 +748,7 @@ async function doLogin() {
 
 function enterHome() {
   $('#greet').textContent = 'Здравствуйте, ' + shortName(state.session.fio);
+  paintAssignment();
   goTo('view-home');
 }
 
@@ -798,10 +857,11 @@ async function submit() {
     await sendPayload(payload);
     await idbDel('queue', payload.client_id);
     showThanks('Спасибо<br>за ваш отзыв!',
-               'Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.');
+               'Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.',
+               state.surveyDots, state.surveyOf);
   } catch (e) {
     console.error('[PRIMUM] Ошибка отправки:', e);
-    showThanks('Ответ<br>сохранён', queueMessage(e));
+    showThanks('Ответ<br>сохранён', queueMessage(e), state.surveyDots, state.surveyOf);
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       navigator.serviceWorker.ready.then((reg) => reg.sync.register('primum-flush')).catch(() => {});
     }
@@ -1200,10 +1260,12 @@ async function submitAppeal() {
   updatePending();
 }
 
-/** Экран благодарности с нужным заголовком и текстом. */
-function showThanks(heading, note) {
+/** Экран благодарности. dots/of — последний шаг опроса; для остальных разделов 0. */
+function showThanks(heading, note, dots, of) {
   $('#thanks-h').innerHTML = heading;
   $('#thanks-note').textContent = note;
+  SCREENS['view-thanks'].dots = dots || 0;
+  SCREENS['view-thanks'].of = of || 0;
   goTo('view-thanks');
 }
 
@@ -1222,6 +1284,15 @@ function startAppeal() {
   state.engineer = state.vehicle = state.topic = state.topicCustom = state.message = '';
   $('#in-eng').value = '';
   $('#in-vehicle').value = '';
+
+  // Закреплённый тягач подставляется вместо поля ввода.
+  const t = assignedTractor();
+  state.vehicleAssigned = !!t;
+  state.vehicle = t;
+  $('#appeal-vehicle').hidden = !t;
+  $('#wrap-vehicle').hidden = !!t;
+  if (t) $('#appeal-vehicle-t').textContent = t;
+
   $('#in-topic').value = '';
   $('#in-topic-custom').value = '';
   $('#in-message').value = '';
@@ -1368,16 +1439,40 @@ function startHandover() {
 
 /* ---------- Опрос: старт и сброс ---------- */
 function startSurvey() {
-  state.tractor = state.trailer = state.service = state.comment = '';
+  state.service = state.comment = '';
   state.rating = null;
-  $('#in-tractor').value = '';
-  $('#in-trailer').value = '';
   $('#in-service').value = '';
   $('#in-comment').value = '';
   $('#rating-val').innerHTML = '&#8212;<small>/10</small>';
   $$('#scale .dot').forEach((d) => d.classList.remove('on', 'pick'));
+
+  // Есть закреплённое ТС — шаг с вводом номеров водителю не нужен.
+  const t = assignedTractor(), tr = assignedTrailer();
+  state.vehicleAssigned = !!t;
+  const line = $('#rating-vehicle');
+  if (state.vehicleAssigned) {
+    state.tractor = t;
+    state.trailer = tr;
+    $('#rating-vehicle-t').textContent = tr ? t + ' / ' + tr : t;
+    line.hidden = false;
+    SCREENS['view-rating'].back = 'view-home';
+    SCREENS['view-rating'].dots = 1; SCREENS['view-rating'].of = 2;
+    state.surveyDots = 2; state.surveyOf = 2;
+    validateRating();
+    goTo('view-rating');
+    return;
+  }
+
+  // Запасной путь: сотруднику ТС не закреплено — номера вводятся вручную.
+  state.tractor = state.trailer = '';
+  line.hidden = true;
+  $('#in-tractor').value = '';
+  $('#in-trailer').value = '';
   setFieldError('#in-tractor', '#err-tractor', '');
   setFieldError('#in-trailer', '#err-trailer', '');
+  SCREENS['view-rating'].back = 'view-vehicle';
+  SCREENS['view-rating'].dots = 2; SCREENS['view-rating'].of = 3;
+  state.surveyDots = 3; state.surveyOf = 3;
   validateAuthVehicle(); validateRating();
   updateFleetStatus();
   goTo('view-vehicle');
@@ -1499,7 +1594,7 @@ async function init() {
 
   // опрос
   on('#btn-next', 'click', () => goTo('view-rating'));
-  on('#btn-back', 'click', () => goTo('view-vehicle'));
+  on('#btn-back', 'click', () => goTo(SCREENS['view-rating'].back || 'view-home'));
   on('#btn-submit', 'click', submit);
   on('#btn-home', 'click', () => goTo('view-home'));
   on('#btn-head-back', 'click', (e) => {
@@ -1534,6 +1629,7 @@ async function init() {
     state.session = session;
     await idbPut('kv', session, 'session').catch(() => {});
     enterHome();
+    refreshAssignment();
   } else {
     if (session) await idbDel('kv', 'session').catch(() => {});
     goTo('view-login');
@@ -1545,7 +1641,7 @@ async function init() {
 
   flushQueue();
   updatePending();
-  window.addEventListener('online', () => { loadBootstrap(); flushQueue(); });
+  window.addEventListener('online', () => { loadBootstrap(); flushQueue(); refreshAssignment(); });
   window.addEventListener('offline', () => { updateBootStatus(); updateFleetStatus(); });
   if (navigator.serviceWorker && navigator.serviceWorker.addEventListener) {
     navigator.serviceWorker.addEventListener('message', (e) => {
