@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- Политика безопасности содержимого: страница может загружать код только
+     со своего адреса и с адреса скрипта Google. Даже если в данные из таблицы
+     попадёт разметка со скриптом, выполнить его браузер не даст.
+     frame-ancestors через <meta> не работает — его нужно отдавать заголовком
+     на хостинге, см. README, раздел «Меры безопасности». -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://script.google.com https://script.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#2C3136">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -146,6 +153,9 @@
     min-height:134px;text-align:left;cursor:pointer;transition:transform .12s, box-shadow .15s;
   }
   .tile:active{transform:scale(.975)}
+  /* Отключённый администратором раздел исчезает совсем: display у класса
+     иначе перебил бы атрибут hidden. */
+  .tile[hidden]{display:none}
   .tile-ic{
     width:40px;height:40px;border-radius:11px;background:var(--paper);
     display:flex;align-items:center;justify-content:center;color:var(--red);flex-shrink:0;
@@ -322,6 +332,27 @@
     line-height:21px;cursor:pointer;
   }
 
+  /* ---------- строки проверки: комплектность и состояние ----------
+     Имена классов начинаются с crow-, а не check-: класс .check уже занят
+     круглой галочкой на экране «Спасибо», и совпадение схлопывало строку
+     в круг 76 px. */
+  .crows{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+  .crow{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:13px 15px}
+  .crow-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .crow-t{font-family:'Oswald';font-size:14.5px;letter-spacing:.02em;color:var(--graphite-deep);line-height:1.25}
+  .crow-btns{display:flex;gap:8px;flex-shrink:0}
+  .cb{
+    width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line);background:#fff;
+    color:#C3C7CB;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:.12s;
+  }
+  .cb svg{width:20px;height:20px}
+  .cb.on[data-st="ok"]{background:#1F7A3D;border-color:#1F7A3D;color:#fff}
+  .cb.on[data-st="warn"]{background:#E08A1E;border-color:#E08A1E;color:#fff}
+  .cb.on[data-st="bad"]{background:var(--red);border-color:var(--red);color:#fff}
+  .crow-note{margin:12px 0 0;min-height:70px}
+  .crow-note[hidden]{display:none}
+
   /* ---------- заглушка ненаполненного раздела ---------- */
   .empty{
     background:#fff;border:1.5px solid var(--line);border-radius:16px;
@@ -403,7 +434,7 @@
         <div class="field-label">ФИО <span class="req">*</span></div>
         <div class="tf">
           <input id="in-fio" autocomplete="off" role="combobox" aria-autocomplete="list"
-                 autocapitalize="none" autocorrect="off" spellcheck="false"
+                 autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="120"
                  aria-expanded="false" placeholder="Начните вводить фамилию">
         </div>
         <ul class="aclist names" id="list-fio" role="listbox" hidden></ul>
@@ -413,7 +444,7 @@
         <div class="field-label">Пароль <span class="req">*</span></div>
         <div class="pwd" id="wrap-pwd">
           <input id="in-pwd" type="password" autocomplete="current-password"
-                 autocapitalize="none" autocorrect="off" spellcheck="false"
+                 autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="200"
                  inputmode="text" placeholder="Введите пароль">
           <button type="button" id="btn-eye">Показать</button>
         </div>
@@ -578,7 +609,7 @@
       <div class="scale-legend"><span>Плохо</span><span>Отлично</span></div>
 
       <div class="field-label">Комментарий <span class="req">*</span></div>
-      <textarea class="textarea" id="in-comment"
+      <textarea class="textarea" id="in-comment" maxlength="2000"
                 placeholder="Опишите, что было выполнено, и что осталось не так"></textarea>
 
       <div class="spacer"></div>
@@ -711,12 +742,12 @@
       <div id="wrap-topic-custom" hidden>
         <div class="field-label">Укажите свой вариант <span class="req">*</span></div>
         <div class="tf" style="margin-bottom:18px">
-          <input id="in-topic-custom" autocomplete="off" placeholder="Кратко назовите тему">
+          <input id="in-topic-custom" autocomplete="off" maxlength="200" placeholder="Кратко назовите тему">
         </div>
       </div>
 
       <div class="field-label">Описание <span class="req">*</span></div>
-      <textarea class="textarea" id="in-message"
+      <textarea class="textarea" id="in-message" maxlength="4000"
                 placeholder="Опишите вопрос, проблему или предложение"></textarea>
 
       <div class="spacer"></div>
@@ -761,26 +792,33 @@
         <button type="button" class="seg-btn" data-kind="Сдача">Сдача ТС</button>
       </div>
 
-      <div class="ac">
-        <div class="field-label">Номер тягача <span class="req">*</span></div>
-        <div class="plate">
-          <input class="input" id="in-ho-tractor" autocomplete="off" autocapitalize="characters"
-                 autocorrect="off" spellcheck="false" role="combobox"
-                 aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
-        </div>
-        <ul class="aclist" id="list-ho-tractor" role="listbox" hidden></ul>
-        <p class="err" id="err-ho-tractor" role="alert" hidden></p>
-      </div>
+      <label class="chk" for="ho-same" id="ho-same-wrap" hidden>
+        <input type="checkbox" id="ho-same" checked>
+        <span id="ho-same-t">Тягач и полуприцеп — мои</span>
+      </label>
 
-      <div class="ac">
-        <div class="field-label">Номер полуприцепа</div>
-        <div class="plate">
-          <input class="input" id="in-ho-trailer" autocomplete="off" autocapitalize="characters"
-                 autocorrect="off" spellcheck="false" role="combobox"
-                 aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер, если есть">
+      <div id="ho-plates">
+        <div class="ac">
+          <div class="field-label">Номер тягача <span class="req">*</span></div>
+          <div class="plate">
+            <input class="input" id="in-ho-tractor" autocomplete="off" autocapitalize="characters"
+                   autocorrect="off" spellcheck="false" role="combobox" maxlength="32"
+                   aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
+          </div>
+          <ul class="aclist" id="list-ho-tractor" role="listbox" hidden></ul>
+          <p class="err" id="err-ho-tractor" role="alert" hidden></p>
         </div>
-        <ul class="aclist" id="list-ho-trailer" role="listbox" hidden></ul>
-        <p class="err" id="err-ho-trailer" role="alert" hidden></p>
+
+        <div class="ac">
+          <div class="field-label">Номер полуприцепа</div>
+          <div class="plate">
+            <input class="input" id="in-ho-trailer" autocomplete="off" autocapitalize="characters"
+                   autocorrect="off" spellcheck="false" role="combobox" maxlength="32"
+                   aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер, если есть">
+          </div>
+          <ul class="aclist" id="list-ho-trailer" role="listbox" hidden></ul>
+          <p class="err" id="err-ho-trailer" role="alert" hidden></p>
+        </div>
       </div>
 
       <div class="ph-head">
@@ -792,8 +830,12 @@
       <div class="ph-grid" id="ho-photos"></div>
       <p class="hint" id="ho-hint">До 10 снимков тягача и полуприцепа. Нажмите на снимок, чтобы увеличить, крестик — удалить.</p>
 
+      <div class="field-label" style="margin-top:20px">Комплектность и состояние <span class="req">*</span></div>
+      <div class="crows" id="ho-checks"></div>
+      <p class="hint" id="ho-checks-hint">Отметьте каждую строку: всё в порядке, есть замечания или неисправно.</p>
+
       <div class="field-label" style="margin-top:20px">Замечания и неисправности</div>
-      <textarea class="textarea" id="ho-notes"
+      <textarea class="textarea" id="ho-notes" maxlength="4000"
                 placeholder="Опишите повреждения, замечания и неисправности"></textarea>
 
       <div class="spacer"></div>

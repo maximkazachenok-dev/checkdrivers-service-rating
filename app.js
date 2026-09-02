@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.5.0',
+  APP_VERSION: '2.6.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -148,6 +148,9 @@ const state = {
   engineers: [],            // ФИО ведущих инженеров
   topics: [],               // пункты обращения (источник истины — Code.gs)
   fleet: { tractors: [], trailers: [] },
+  /* Какие разделы показывать. Управляется листом Settings в таблице:
+     отключённый раздел исчезает из приложения целиком, без объяснений. */
+  features: { rating: true, inbox: true, eco: true, newbie: true, handover: true, name_hints: true },
   bootLoaded: false,
   bootLoading: false,       // идёт первая загрузка справочников без кэша
   lastBootError: '',        // причина последнего сбоя загрузки — для диагностики
@@ -294,7 +297,9 @@ async function loadBootstrap() {
     state.engineers = cached.engineers || [];
     state.topics = cached.topics || [];
     state.fleet = cached.fleet || { tractors: [], trailers: [] };
+    if (cached.features) state.features = Object.assign({}, state.features, cached.features);
     state.bootLoaded = true;
+    applyFeatures();
   }
   // navigator.onLine здесь НЕ используется как условие: при холодном старте
   // установленного приложения он часто ещё false, хотя сеть есть. Пробуем всегда,
@@ -321,11 +326,13 @@ async function loadBootstrap() {
           state.engineers = data.engineers || [];
           state.topics = data.topics || [];
           state.fleet = { tractors: data.tractors || [], trailers: data.trailers || [] };
+          if (data.features) state.features = Object.assign({}, state.features, data.features);
           state.bootLoaded = true;
           state.lastBootError = '';
+          applyFeatures();
           await idbPut('kv', {
             employees: state.employees, engineers: state.engineers,
-            topics: state.topics, fleet: state.fleet
+            topics: state.topics, fleet: state.fleet, features: state.features
           }, 'bootstrap').catch(() => {});
           fillTopics();
           console.info('[PRIMUM] Справочники: сотрудников', state.employees.length,
@@ -352,12 +359,37 @@ async function loadBootstrap() {
   updateHandoverStatus();
 }
 
+/* Плитки главной по ключам разделов. */
+const FEATURE_TILES = {
+  rating: '#tile-rating', inbox: '#tile-inbox', eco: '#tile-eco',
+  newbie: '#tile-newbie', handover: '#tile-handover'
+};
+
+/**
+ * Прячет отключённые администратором разделы. Именно прячет: водитель не
+ * должен видеть ни плитку, ни сообщение о недоступности — раздела для него
+ * просто нет.
+ */
+function applyFeatures() {
+  Object.keys(FEATURE_TILES).forEach((key) => {
+    const el = $(FEATURE_TILES[key]);
+    if (el) el.hidden = state.features[key] === false;
+  });
+}
+
+/** Раздел включён? Проверяется и перед открытием — на случай, если настройка
+ *  изменилась, пока приложение было открыто. */
+function featureOn(key) { return state.features[key] !== false; }
+
 /** Состояние экрана входа: без списка сотрудников войти нельзя. */
 function updateBootStatus() {
   const banner = $('#boot-status');
   const fio = $('#in-fio'), pwd = $('#in-pwd');
   if (!banner || !fio || !pwd) return;
-  const ready = state.bootLoaded && state.employees.length > 0;
+  // При отключённых подсказках ФИО сервер не выдаёт список сотрудников —
+  // тогда готовность к входу определяется только загрузкой справочников.
+  const ready = state.bootLoaded && (state.employees.length > 0 || !featureOn('name_hints'));
+  if (!featureOn('name_hints')) fio.placeholder = 'Введите ФИО полностью';
   fio.disabled = !ready;
   pwd.disabled = !ready;
   if (ready) { banner.hidden = true; }
@@ -487,8 +519,11 @@ function setupAutocomplete(inputSel, listSel, kind) {
 
   function render(items) {
     if (!items.length) { list.hidden = true; list.innerHTML = ''; return; }
+    // Экранирование обязательно: подсказки приходят из таблицы, а её содержимое —
+    // это данные, а не разметка. Иначе строка вида <img onerror=...> в ФИО
+    // или номере превратилась бы в исполняемый код на экране водителя.
     list.innerHTML = items.map((n, i) =>
-      `<li role="option" data-val="${n}" ${i === active ? 'aria-selected="true" class="on"' : ''}>${n}</li>`
+      `<li role="option" data-val="${escapeHtml(n)}" ${i === active ? 'aria-selected="true" class="on"' : ''}>${escapeHtml(n)}</li>`
     ).join('');
     list.hidden = false;
   }
@@ -605,8 +640,9 @@ function matchEmployee(value) {
 function validateLogin() {
   const fio = ($('#in-fio').value || '').trim();
   const pwd = $('#in-pwd').value || '';
-  const ready = state.bootLoaded && state.employees.length > 0;
-  $('#btn-login').disabled = !(ready && matchEmployee(fio) && pwd.length > 0);
+  const ready = state.bootLoaded && (state.employees.length > 0 || !featureOn('name_hints'));
+  const nameOk = featureOn('name_hints') ? !!matchEmployee(fio) : fio.length >= 5;
+  $('#btn-login').disabled = !(ready && nameOk && pwd.length > 0);
 }
 
 function validateAuthVehicle() {
@@ -639,17 +675,32 @@ function validateAppeal(showErrors) {
   $('#btn-appeal-send').disabled = !ok;
 }
 
-/** Отчёт можно отправить, если выбрана операция и номер тягача есть в автопарке. */
+/**
+ * Отчёт готов к отправке, если выбрана операция, известен тягач и отмечены все
+ * строки проверки. Незаполненная строка делает отчёт двусмысленным: непонятно,
+ * то ли всё в порядке, то ли водитель до неё не дошёл.
+ */
 function validateHandover() {
   const btn = $('#btn-ho-send');
   if (!btn) return;
   const h = state.handover;
   const tRaw = h.tractor.trim(), trRaw = h.trailer.trim();
-  const tOk = !!matchPlate(tRaw, 'tractor');
-  const trOk = !trRaw || !!matchPlate(trRaw, 'trailer');
-  setFieldError('#in-ho-tractor', '#err-ho-tractor', tRaw && !tOk ? 'Номер не найден в автопарке' : '');
-  setFieldError('#in-ho-trailer', '#err-ho-trailer', trRaw && !trOk ? 'Номер не найден в автопарке' : '');
-  btn.disabled = !(h.kind && tOk && trOk);
+  // Закреплённые номера с автопарком не сверяем: их выдал сервер, а список
+  // на устройстве может быть ещё не загружен.
+  const tOk = h.same ? !!tRaw : !!matchPlate(tRaw, 'tractor');
+  const trOk = h.same || !trRaw || !!matchPlate(trRaw, 'trailer');
+  if (!h.same) {
+    setFieldError('#in-ho-tractor', '#err-ho-tractor', tRaw && !tOk ? 'Номер не найден в автопарке' : '');
+    setFieldError('#in-ho-trailer', '#err-ho-trailer', trRaw && !trOk ? 'Номер не найден в автопарке' : '');
+  }
+  const missing = checksMissing();
+  const hint = $('#ho-checks-hint');
+  if (hint) {
+    hint.textContent = missing.length
+      ? 'Осталось отметить: ' + missing.join(', ')
+      : 'Все строки отмечены.';
+  }
+  btn.disabled = !(h.kind && tOk && trOk && !missing.length);
 }
 
 function validateRating() {
@@ -688,12 +739,14 @@ function paintAssignment() {
 async function refreshAssignment() {
   if (!state.session || !navigator.onLine) return;
   try {
-    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, assign: state.session.fio });
+    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, assign: state.session.fio,
+                                session: state.session.key || '' });
     // Развёртывание старой версии не знает про assign и отвечает справочниками —
     // такой ответ распознаём по отсутствию fio и оставляем закрепление как есть.
     if (!data || !data.ok || !data.fio || typeof data.tractor !== 'string') return;
     state.session.tractor = data.tractor;
     state.session.trailer = data.trailer || '';
+    if (data.features) { state.features = Object.assign({}, state.features, data.features); applyFeatures(); }
     if (state.session.remember) await idbPut('kv', state.session, 'session').catch(() => {});
     paintAssignment();
   } catch (e) {
@@ -707,7 +760,7 @@ async function doLogin() {
   const fioRaw = ($('#in-fio').value || '').trim();
   // Нормализация обязательна: мобильные клавиатуры искажают символы.
   const pwd = normPassword($('#in-pwd').value || '');
-  const fio = matchEmployee(fioRaw);
+  const fio = matchEmployee(fioRaw) || (featureOn('name_hints') ? null : fioRaw);
   if (!fio) { setFieldError('#in-fio', '#err-login', 'Выберите ФИО из списка'); return; }
 
   if (!navigator.onLine) {
@@ -724,16 +777,25 @@ async function doLogin() {
     const hash = await sha256hex(pwd);
     const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash });
     if (data.ok && data.authorized) {
+      // key — подписанный сервером сеансовый ключ: им подтверждается право
+      // записывать данные. Общего токена из кода страницы для этого мало.
       state.session = { fio: data.fio || fio, at: Date.now(), remember: remember,
-                        tractor: data.tractor || '', trailer: data.trailer || '' };
+                        tractor: data.tractor || '', trailer: data.trailer || '',
+                        key: data.session || '' };
+      if (data.features) { state.features = Object.assign({}, state.features, data.features); applyFeatures(); }
       // Без галочки сессия живёт только в памяти: закрыли приложение — нужен пароль.
       if (remember) await idbPut('kv', state.session, 'session').catch(() => {});
       else await idbDel('kv', 'session').catch(() => {});
       $('#in-pwd').value = '';
       setFieldError('#in-pwd', '#err-login', '');
       enterHome();
+    } else if (data.error === 'too_many_attempts') {
+      setFieldError('#in-pwd', '#err-login',
+        'Слишком много попыток. Подождите 15 минут и попробуйте снова.');
     } else {
-      setFieldError('#in-pwd', '#err-login', 'Неверный пароль');
+      // Один текст и на неизвестное ФИО, и на неверный пароль: по разным
+      // сообщениям можно было бы выяснять, кто работает в компании.
+      setFieldError('#in-pwd', '#err-login', 'Неверные ФИО или пароль');
     }
   } catch (e) {
     console.error('[PRIMUM] Ошибка входа:', e);
@@ -822,6 +884,9 @@ async function flushQueue() {
   if (!navigator.onLine) return;
   const items = await idbAll('queue').catch(() => []);
   for (const item of items) {
+    // Запись могла попасть в очередь до входа — тогда ключа в ней нет.
+    // Досылаем с текущим ключом, иначе сервер её не примет.
+    if (!item.session && state.session && state.session.key) item.session = state.session.key;
     try { await sendPayload(item); await idbDel('queue', item.client_id); }
     catch (_) { /* оставляем в очереди до следующей попытки */ }
   }
@@ -840,6 +905,9 @@ async function submit() {
   btn.disabled = true;
   const payload = {
     token: CONFIG.SHARED_TOKEN,
+    // Ключ кладётся в саму запись: она может уйти в очередь и отправиться
+    // через несколько дней, когда сессия в приложении уже закончится.
+    session: (state.session && state.session.key) || '',
     client_id: uuid(),
     employee: state.session ? state.session.fio : '',
     tractor: state.tractor.trim(),
@@ -934,8 +1002,11 @@ async function diagSaveUrl() {
   const field = $('#diag-url');
   if (!field) return;
   const val = (field.value || '').trim();
-  if (val && val.indexOf('http') !== 0) {
-    diagOut('Адрес должен начинаться с https://');
+  // Адрес ограничен развёртыванием Apps Script. Иначе достаточно было бы
+  // подсунуть водителю ссылку на чужой сервер, чтобы уводить туда отправляемые
+  // данные; тот же список адресов задан и в политике безопасности страницы.
+  if (val && !/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(val)) {
+    diagOut('Адрес должен быть вида\nhttps://script.google.com/macros/s/.../exec');
     return;
   }
   if (val) {
@@ -1010,12 +1081,14 @@ async function diagCheckLogin() {
     const hash = await sha256hex(pwd);
     const fio = matchEmployee(fioRaw) || fioRaw;
     const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash });
+    // Ни пароль, ни его хеш на экран не выводим: экран диагностики может
+    // оказаться на виду у посторонних.
     diagOut('ФИО передано: ' + fio +
             '\nДлина пароля: ' + pwd.length + ' символов' +
             (changed ? '\nВНИМАНИЕ: клавиатура подставила спецсимволы, они исправлены' : '') +
             '\nФИО найдено в списке: ' + (matchEmployee(fioRaw) ? 'да' : 'НЕТ') +
-            '\nХеш (первые 12): ' + hash.slice(0, 12) +
-            '\n\nОтвет сервера:\n' + JSON.stringify(data));
+            '\n\nОтвет сервера: ' +
+            (data.authorized ? 'вход разрешён' : 'вход отклонён (' + (data.error || 'без причины') + ')'));
   } catch (e) {
     diagOut('Ошибка: ' + e.message);
   }
@@ -1115,6 +1188,7 @@ let carMedia = null, carText = null, carNewbie = null;
 /* ---------- Раздел «Советы по эко-вождению» ---------- */
 
 function openEcoMenu() {
+  if (!featureOn('eco')) return;
   const c = window.ECO_CONTENT || {};
   if (c.what) $('#eco-what-sub').textContent = c.what.subtitle || '';
   if (c.tips) $('#eco-tips-sub').textContent = c.tips.subtitle || '';
@@ -1168,6 +1242,7 @@ const NEWBIE_ICON =
 
 /** Меню раздела строится из content.js — добавить пункт можно без правок app.js. */
 function openNewbieMenu() {
+  if (!featureOn('newbie')) return;
   const box = $('#newbie-menu');
   if (!box) return;
   const list = window.NEWBIE_CONTENT || [];
@@ -1197,8 +1272,10 @@ function openNewbieItem(i) {
   if (filled) carNewbie.reset();
 }
 
+/** Экранирование для вставки в разметку — и в текст, и в значение атрибута. */
 function escapeHtml(t) {
-  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 /* ---------- Полноэкранный просмотр изображения ---------- */
@@ -1232,6 +1309,7 @@ async function submitAppeal() {
   btn.disabled = true;
   const payload = {
     token: CONFIG.SHARED_TOKEN,
+    session: (state.session && state.session.key) || '',
     kind: 'appeal',
     client_id: uuid(),
     employee: state.session ? state.session.fio : '',
@@ -1281,6 +1359,7 @@ function queueMessage(e) {
 /* ---------- Обращение: старт и сброс ---------- */
 
 function startAppeal() {
+  if (!featureOn('inbox')) return;
   state.engineer = state.vehicle = state.topic = state.topicCustom = state.message = '';
   $('#in-eng').value = '';
   $('#in-vehicle').value = '';
@@ -1306,6 +1385,103 @@ function startAppeal() {
 }
 
 /* ---------- Приём/сдача ТС ---------- */
+
+/* Строки проверки в отчёте. Добавить новую — достаточно дописать сюда. */
+const HO_CHECKS = [
+  { key: 'adr',           title: 'Комплект АДР' },
+  { key: 'tmc',           title: 'Комплект ТМЦ' },
+  { key: 'tires_tractor', title: 'Состояние шин тягач' },
+  { key: 'tires_trailer', title: 'Состояние шин прицеп' }
+];
+
+const CHECK_ICONS = {
+  ok:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M9.1 9.2a3 3 0 1 1 3.9 2.9c-.9.3-1.4 1-1.4 1.9v.5"/>' +
+        '<circle cx="11.6" cy="17.6" r="1.05" fill="currentColor" stroke="none"/></svg>',
+  bad:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.4v7.2"/>' +
+        '<circle cx="12" cy="17.6" r="1.05" fill="currentColor" stroke="none"/></svg>'
+};
+
+const CHECK_LABELS = { ok: 'Всё в порядке', warn: 'Есть замечания', bad: 'Неисправно' };
+
+function emptyChecks() {
+  const out = {};
+  HO_CHECKS.forEach((c) => { out[c.key] = { status: '', comment: '' }; });
+  return out;
+}
+
+/** Разметка строк проверки. Строится один раз при открытии раздела:
+ *  перерисовка на каждое нажатие сбивала бы курсор в поле комментария. */
+function renderChecks() {
+  const box = $('#ho-checks');
+  if (!box) return;
+  box.innerHTML = HO_CHECKS.map((c) => {
+    const btns = ['ok', 'warn', 'bad'].map((st) =>
+      '<button type="button" class="cb" data-st="' + st + '" data-key="' + c.key + '"' +
+      ' aria-pressed="false" aria-label="' + CHECK_LABELS[st] + '">' + CHECK_ICONS[st] + '</button>'
+    ).join('');
+    return '<div class="crow" data-key="' + c.key + '">' +
+           '<div class="crow-head"><span class="crow-t">' + escapeHtml(c.title) + '</span>' +
+           '<span class="crow-btns">' + btns + '</span></div>' +
+           '<textarea class="textarea crow-note" data-key="' + c.key + '" maxlength="500" hidden ' +
+           'placeholder="Опишите замечания"></textarea></div>';
+  }).join('');
+}
+
+/** Отметка состояния. Повторное нажатие на ту же кнопку снимает отметку. */
+function setCheckStatus(key, status) {
+  const c = state.handover.checks[key];
+  if (!c) return;
+  c.status = (c.status === status) ? '' : status;
+  const row = $('#ho-checks .crow[data-key="' + key + '"]');
+  if (!row) return;
+  row.querySelectorAll('.cb').forEach((b) => {
+    const on = b.dataset.st === c.status;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const note = row.querySelector('.crow-note');
+  const needNote = c.status === 'warn' || c.status === 'bad';
+  note.hidden = !needNote;
+  note.placeholder = c.status === 'bad' ? 'Опишите неисправность' : 'Опишите замечания';
+  if (!needNote) { note.value = ''; c.comment = ''; }
+  validateHandover();
+}
+
+/** Строки, из-за которых отчёт пока нельзя отправить. */
+function checksMissing() {
+  const out = [];
+  HO_CHECKS.forEach((c) => {
+    const st = state.handover.checks[c.key] || {};
+    if (!st.status) out.push(c.title);
+    else if ((st.status === 'warn' || st.status === 'bad') && !st.comment.trim()) {
+      out.push(c.title + ' (нужен комментарий)');
+    }
+  });
+  return out;
+}
+
+/** Номера как на главной — водителю не нужно вводить их руками. */
+function applyHandoverSame() {
+  const box = $('#ho-same');
+  const same = !!(box && !$('#ho-same-wrap').hidden && box.checked);
+  state.handover.same = same;
+  $('#ho-plates').hidden = same;
+  if (same) {
+    state.handover.tractor = assignedTractor();
+    state.handover.trailer = assignedTrailer();
+    $('#in-ho-tractor').value = state.handover.tractor;
+    $('#in-ho-trailer').value = state.handover.trailer;
+    setFieldError('#in-ho-tractor', '#err-ho-tractor', '');
+    setFieldError('#in-ho-trailer', '#err-ho-trailer', '');
+  }
+  validateHandover();
+}
+
 
 /**
  * Снимок с камеры весит 3–5 МБ, десяток таких не поместится ни в память,
@@ -1403,6 +1579,13 @@ async function submitHandover() {
     tractor: h.tractor.trim(),
     trailer: h.trailer.trim(),
     notes: h.notes.trim(),
+    checks: HO_CHECKS.map((c) => ({
+      key: c.key,
+      title: c.title,
+      status: h.checks[c.key].status,
+      status_text: CHECK_LABELS[h.checks[c.key].status] || '',
+      comment: h.checks[c.key].comment.trim()
+    })),
     photos: h.photos.slice(),
     created_at: new Date().toISOString(),
     app_version: CONFIG.APP_VERSION
@@ -1421,11 +1604,23 @@ async function submitHandover() {
 }
 
 function startHandover() {
-  state.handover = { kind: '', tractor: '', trailer: '', notes: '', photos: [] };
+  if (!featureOn('handover')) return;
+  state.handover = { kind: '', tractor: '', trailer: '', notes: '', photos: [],
+                     same: false, checks: emptyChecks() };
   $('#in-ho-tractor').value = '';
   $('#in-ho-trailer').value = '';
   $('#ho-notes').value = '';
   $('#ho-file').value = '';
+
+  // Закреплённые ТС: предлагаем не вводить номера вручную.
+  const t = assignedTractor(), tr = assignedTrailer();
+  const wrap = $('#ho-same-wrap');
+  wrap.hidden = !t;
+  $('#ho-same').checked = !!t;
+  $('#ho-same-t').textContent = t
+    ? 'Мои ТС: ' + (tr ? t + ' / ' + tr : t)
+    : 'Тягач и полуприцеп — мои';
+  renderChecks();
   $('#ho-hint').textContent =
     'До 10 снимков тягача и полуприцепа. Нажмите на снимок, чтобы увеличить, крестик — удалить.';
   setFieldError('#in-ho-tractor', '#err-ho-tractor', '');
@@ -1433,12 +1628,13 @@ function startHandover() {
   setHandoverKind('');
   renderPhotos();
   updateHandoverStatus();
-  validateHandover();
+  applyHandoverSame();
   goTo('view-handover');
 }
 
 /* ---------- Опрос: старт и сброс ---------- */
 function startSurvey() {
+  if (!featureOn('rating')) return;
   state.service = state.comment = '';
   state.rating = null;
   $('#in-service').value = '';
@@ -1558,6 +1754,17 @@ async function init() {
     if (img) openZoom(img.src, img.alt);
   });
   on('#ho-notes', 'input', (e) => { state.handover.notes = e.target.value; });
+  on('#ho-same', 'change', applyHandoverSame);
+  on('#ho-checks', 'click', (e) => {
+    const b = e.target.closest('.cb');
+    if (b) setCheckStatus(b.dataset.key, b.dataset.st);
+  });
+  on('#ho-checks', 'input', (e) => {
+    const note = e.target.closest('.crow-note');
+    if (!note) return;
+    state.handover.checks[note.dataset.key].comment = note.value;
+    validateHandover();
+  });
   on('#btn-ho-send', 'click', submitHandover);
 
   // эко-вождение
