@@ -8,7 +8,7 @@
      попадёт разметка со скриптом, выполнить его браузер не даст.
      frame-ancestors через <meta> не работает — его нужно отдавать заголовком
      на хостинге, см. README, раздел «Меры безопасности». -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://script.google.com https://script.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://script.google.com https://script.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#2C3136">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -353,6 +353,54 @@
   .crow-note{margin:12px 0 0;min-height:70px}
   .crow-note[hidden]{display:none}
 
+  /* ---------- документы ---------- */
+  .doc-tip{
+    display:flex;gap:15px;align-items:flex-start;background:#fff;
+    border:1.5px solid var(--line);border-radius:14px;padding:15px;margin-bottom:18px;
+  }
+  .doc-tip-frame{
+    width:58px;height:82px;border:2px dashed var(--red);border-radius:4px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Oswald';font-size:13px;letter-spacing:.06em;color:var(--red);
+  }
+  .doc-tip-list{
+    list-style:none;display:flex;flex-direction:column;gap:7px;
+    font-size:13px;line-height:1.45;color:#42484F;
+  }
+  .doc-tip-list li{padding-left:14px;position:relative}
+  .doc-tip-list li:before{
+    content:'';position:absolute;left:0;top:7px;width:5px;height:5px;
+    border-radius:50%;background:var(--red);
+  }
+  .doc-verdict{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:16px}
+  .doc-verdict.good{border-color:#1F7A3D;background:#F1F8F3}
+  .doc-verdict.bad{border-color:var(--red);background:#FDEBEC}
+  .doc-verdict-t{font-family:'Oswald';font-size:16px;line-height:1.25;color:var(--graphite-deep);margin-bottom:5px}
+  .doc-verdict.good .doc-verdict-t{color:#1F7A3D}
+  .doc-verdict.bad .doc-verdict-t{color:var(--red-deep)}
+  .doc-verdict-s{font-size:13px;line-height:1.5;color:#5b6167}
+  .doc-verdict-list{
+    list-style:none;display:flex;flex-direction:column;gap:7px;margin-top:4px;
+    font-size:13px;line-height:1.45;color:var(--red-deep);
+  }
+  .doc-verdict-list li{padding-left:14px;position:relative}
+  .doc-verdict-list li:before{
+    content:'';position:absolute;left:0;top:7px;width:5px;height:5px;
+    border-radius:50%;background:currentColor;
+  }
+  .doc-preview{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:8px;margin-bottom:10px}
+  .doc-preview img{width:100%;height:auto;display:block;border-radius:8px}
+  /* Правка углов: снимок и поверх него перетаскиваемые маркеры. */
+  .doc-edit{position:relative;display:inline-block;line-height:0;align-self:center;touch-action:none}
+  .doc-edit img{max-width:100%;height:auto;display:block;border-radius:10px}
+  .doc-edit-svg{position:absolute;left:0;top:0;pointer-events:none}
+  .doc-edit-svg polygon{fill:rgba(214,48,63,.16);stroke:var(--red);stroke-width:2}
+  .doc-h{
+    position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;
+    border:2px solid #fff;background:var(--red);box-shadow:0 2px 8px rgba(26,29,32,.4);
+    touch-action:none;cursor:grab;
+  }
+
   /* ---------- заглушка ненаполненного раздела ---------- */
   .empty{
     background:#fff;border:1.5px solid var(--line);border-radius:16px;
@@ -531,7 +579,7 @@
           <span class="tile-t">Новым сотрудникам</span>
         </button>
 
-        <button class="tile wide" id="tile-handover">
+        <button class="tile" id="tile-handover">
           <span class="tile-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" stroke-linejoin="round">
@@ -540,6 +588,16 @@
             </svg>
           </span>
           <span class="tile-t">Прием/сдача ТС</span>
+        </button>
+
+        <button class="tile" id="tile-docs">
+          <span class="tile-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 12h5M9.5 16h3.5"/>
+            </svg>
+          </span>
+          <span class="tile-t">Документы</span>
         </button>
       </div>
 
@@ -838,6 +896,60 @@
 
       <div class="spacer"></div>
       <button class="btn btn-primary" id="btn-ho-send" disabled>Отправить отчёт</button>
+    </section>
+
+    <!-- ЭКРАН: документы -->
+    <section class="view" id="view-docs">
+      <div class="h1">Документы</div>
+      <p class="lead">Снимок обрезается по краям листа, выравнивается под А4 и проверяется на читаемость.</p>
+
+      <div class="doc-tip">
+        <div class="doc-tip-frame">А4</div>
+        <ul class="doc-tip-list">
+          <li>Протрите объектив камеры</li>
+          <li>Положите документ на однотонную поверхность</li>
+          <li>Держите телефон над центром листа, лист целиком в кадре</li>
+          <li>Свет сбоку: прямой свет даёт блик</li>
+        </ul>
+      </div>
+
+      <input type="file" id="doc-file" accept="image/*" capture="environment" hidden>
+      <button type="button" class="btn btn-primary" id="doc-shot">Сфотографировать документ</button>
+
+      <div class="ph-head" style="margin-top:24px">
+        <div class="field-label" style="margin:0">Снятые страницы</div>
+        <span class="ph-count" id="doc-count">0 / 20</span>
+      </div>
+      <div class="ph-grid" id="doc-list"></div>
+      <p class="hint" id="doc-hint">Нажмите на страницу, чтобы посмотреть; крестик — удалить.</p>
+
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" id="doc-share-all" disabled>Поделиться</button>
+      <button class="btn-text" id="doc-clear" hidden>Удалить все страницы</button>
+    </section>
+
+    <!-- ЭКРАН: результат обработки снимка -->
+    <section class="view" id="view-doc-result">
+      <div class="doc-verdict" id="doc-verdict"></div>
+      <div class="doc-preview"><img id="doc-preview-img" alt="Обработанный документ"></div>
+      <p class="hint" id="doc-metrics"></p>
+
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" id="doc-corners-btn">Поправить углы</button>
+      <button class="btn btn-ghost" id="doc-retake">Переснять</button>
+      <button class="btn btn-primary" id="doc-keep">Оставить</button>
+    </section>
+
+    <!-- ЭКРАН: ручная правка границ документа -->
+    <section class="view" id="view-doc-corners">
+      <div class="h1">Границы документа</div>
+      <p class="lead">Перетащите четыре маркера по углам листа.</p>
+      <div class="doc-edit" id="doc-edit">
+        <img id="doc-edit-img" alt="Исходный снимок">
+        <svg class="doc-edit-svg" id="doc-edit-svg" aria-hidden="true"></svg>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="doc-corners-ok">Готово</button>
     </section>
 
     <!-- ЭКРАН: спасибо -->

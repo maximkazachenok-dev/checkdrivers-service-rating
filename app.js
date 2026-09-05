@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.6.1',
+  APP_VERSION: '2.7.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -20,7 +20,7 @@ const HO_MAX_PHOTOS = 10;
 
 /* ---------- IndexedDB ---------- */
 const DB_NAME = 'primum';
-const DB_VER = 2;   // v2 — добавлено хранилище отчётов о приёме/сдаче ТС
+const DB_VER = 3;   // v2 — отчёты о приёме/сдаче ТС, v3 — снимки документов
 function openDB() {
   return new Promise((res, rej) => {
     const r = indexedDB.open(DB_NAME, DB_VER);
@@ -29,6 +29,7 @@ function openDB() {
       if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'client_id' });
       if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
       if (!db.objectStoreNames.contains('handover')) db.createObjectStore('handover', { keyPath: 'client_id' });
+      if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs', { keyPath: 'id' });
     };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -150,7 +151,8 @@ const state = {
   fleet: { tractors: [], trailers: [] },
   /* Какие разделы показывать. Управляется листом Settings в таблице:
      отключённый раздел исчезает из приложения целиком, без объяснений. */
-  features: { rating: true, inbox: true, eco: true, newbie: true, handover: true, name_hints: true },
+  features: { rating: true, inbox: true, eco: true, newbie: true, handover: true,
+              docs: true, name_hints: true },
   bootLoaded: false,
   bootLoading: false,       // идёт первая загрузка справочников без кэша
   lastBootError: '',        // причина последнего сбоя загрузки — для диагностики
@@ -262,7 +264,10 @@ const SCREENS = {
   'view-thanks':  { sub: 'Оценка ремонта',  back: null,           dots: 0, of: 0 },
   'view-newbie':      { sub: 'Новым сотрудникам', back: 'view-home',   dots: 0 },
   'view-newbie-item': { sub: 'Новым сотрудникам', back: 'view-newbie', dots: 0 },
-  'view-handover':    { sub: 'Прием/сдача ТС',    back: 'view-home',   dots: 0 }
+  'view-handover':    { sub: 'Прием/сдача ТС',    back: 'view-home',   dots: 0 },
+  'view-docs':        { sub: 'Документы',          back: 'view-home',   dots: 0 },
+  'view-doc-result':  { sub: 'Документы',          back: 'view-docs',   dots: 0 },
+  'view-doc-corners': { sub: 'Границы документа',  back: 'view-doc-result', dots: 0 }
 };
 
 function goTo(id) {
@@ -362,7 +367,7 @@ async function loadBootstrap() {
 /* Плитки главной по ключам разделов. */
 const FEATURE_TILES = {
   rating: '#tile-rating', inbox: '#tile-inbox', eco: '#tile-eco',
-  newbie: '#tile-newbie', handover: '#tile-handover'
+  newbie: '#tile-newbie', handover: '#tile-handover', docs: '#tile-docs'
 };
 
 /**
@@ -1635,6 +1640,569 @@ function startHandover() {
   goTo('view-handover');
 }
 
+/* ---------- Раздел «Документы»: съёмка с автообрезкой ----------
+   Водитель снимает документ системной камерой, приложение находит границы
+   листа, выравнивает перспективу под А4, поднимает читаемость и проверяет,
+   годится ли кадр. Всё считается на устройстве: сторонних библиотек нет,
+   их запрещает политика безопасности страницы. */
+
+const DOC_MAX_PAGES = 20;
+const DOC_WORK_SIDE = 2400;                 // до этого размера ужимается снимок
+const DOC_DETECT_SIDE = 400;                // копия, на которой ищутся границы
+const DOC_OUT_W = 1240, DOC_OUT_H = 1754;   // А4 при 150 dpi
+
+/* Пороги качества. Подбираются по реальным снимкам — вынесены сюда,
+   чтобы правка была в одну строку. */
+const DOC_LIMITS = {
+  sharpness: 90,     // дисперсия лапласиана; ниже — снимок смазан
+  upscaleMax: 1.7,   // во сколько раз пришлось растянуть лист до А4; больше — снимали издалека
+  blobMax: 0.93,     // «лист» почти во весь кадр — значит границы не найдены
+  blobMin: 0.05,
+  lumMin: 110,       // средняя яркость листа; ниже — темно
+  contrastMin: 60,   // разница «бумага минус текст»; ниже — текст не различить
+  glareMax: 0.02     // доля пересвеченных точек: 2 % площади листа уже мешают читать
+};
+
+/* Текущая страница на разборе: до того, как водитель нажал «Оставить». */
+let docDraft = null;
+
+/* ---- Общие операции с изображением ---- */
+
+/** Файл с камеры → canvas рабочего размера. */
+function fileToCanvas(file, maxSide) {
+  return new Promise(function (resolve, reject) {
+    const reader = new FileReader();
+    reader.onerror = function () { reject(new Error('read')); };
+    reader.onload = function () {
+      const img = new Image();
+      img.onerror = function () { reject(new Error('decode')); };
+      img.onload = function () {
+        const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * k));
+        c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Уменьшенная копия в оттенках серого — основа и поиска границ, и метрик. */
+function grayFrom(canvas, side) {
+  const k = Math.min(1, side / Math.max(canvas.width, canvas.height));
+  const w = Math.max(1, Math.round(canvas.width * k));
+  const h = Math.max(1, Math.round(canvas.height * k));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(canvas, 0, 0, w, h);
+  const px = ctx.getImageData(0, 0, w, h).data;
+  const g = new Uint8ClampedArray(w * h);
+  for (let i = 0, p = 0; i < g.length; i++, p += 4) {
+    g[i] = (px[p] * 299 + px[p + 1] * 587 + px[p + 2] * 114) / 1000;
+  }
+  return { data: g, w: w, h: h, kx: canvas.width / w, ky: canvas.height / h };
+}
+
+/** Порог Оцу: делит точки на «бумагу» и «фон» по гистограмме яркости. */
+function otsuThreshold(gray) {
+  const hist = new Float64Array(256);
+  for (let i = 0; i < gray.data.length; i++) hist[gray.data[i]]++;
+  const total = gray.data.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let sumB = 0, wB = 0, best = 0, bestVar = -1;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (!wB) continue;
+    const wF = total - wB;
+    if (!wF) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB, mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > bestVar) { bestVar = between; best = t; }
+  }
+  return best;
+}
+
+/**
+ * Наибольшая светлая связная область — это и есть лист бумаги.
+ * Углы берутся как крайние точки по (x+y) и (x−y): для выпуклой области
+ * это даёт пригодный четырёхугольник даже на перекошенном кадре.
+ */
+function findSheet(gray) {
+  const { data, w, h } = gray;
+  const t = otsuThreshold(gray);
+  const seen = new Uint8Array(w * h);
+  const queue = new Int32Array(w * h);
+  let bestSize = 0, bestSeed = -1;
+  for (let start = 0; start < data.length; start++) {
+    if (seen[start] || data[start] <= t) continue;
+    let head = 0, tail = 0, size = 0;
+    queue[tail++] = start; seen[start] = 1;
+    while (head < tail) {
+      const i = queue[head++]; size++;
+      const x = i % w, y = (i / w) | 0;
+      if (x > 0     && !seen[i - 1] && data[i - 1] > t) { seen[i - 1] = 1; queue[tail++] = i - 1; }
+      if (x < w - 1 && !seen[i + 1] && data[i + 1] > t) { seen[i + 1] = 1; queue[tail++] = i + 1; }
+      if (y > 0     && !seen[i - w] && data[i - w] > t) { seen[i - w] = 1; queue[tail++] = i - w; }
+      if (y < h - 1 && !seen[i + w] && data[i + w] > t) { seen[i + w] = 1; queue[tail++] = i + w; }
+    }
+    if (size > bestSize) { bestSize = size; bestSeed = start; }
+  }
+  const frac = bestSize / (w * h);
+  if (bestSeed < 0 || frac < DOC_LIMITS.blobMin || frac > DOC_LIMITS.blobMax) {
+    return { found: false, fill: frac };
+  }
+  // Второй обход — только по найденной области, чтобы собрать крайние точки.
+  seen.fill(0);
+  let head = 0, tail = 0;
+  queue[tail++] = bestSeed; seen[bestSeed] = 1;
+  let minSum = Infinity, maxSum = -Infinity, minDif = Infinity, maxDif = -Infinity;
+  let tl = null, br = null, tr = null, bl = null;
+  while (head < tail) {
+    const i = queue[head++];
+    const x = i % w, y = (i / w) | 0;
+    const sum = x + y, dif = x - y;
+    if (sum < minSum) { minSum = sum; tl = [x, y]; }
+    if (sum > maxSum) { maxSum = sum; br = [x, y]; }
+    if (dif > maxDif) { maxDif = dif; tr = [x, y]; }
+    if (dif < minDif) { minDif = dif; bl = [x, y]; }
+    if (x > 0     && !seen[i - 1] && data[i - 1] > t) { seen[i - 1] = 1; queue[tail++] = i - 1; }
+    if (x < w - 1 && !seen[i + 1] && data[i + 1] > t) { seen[i + 1] = 1; queue[tail++] = i + 1; }
+    if (y > 0     && !seen[i - w] && data[i - w] > t) { seen[i - w] = 1; queue[tail++] = i - w; }
+    if (y < h - 1 && !seen[i + w] && data[i + w] > t) { seen[i + w] = 1; queue[tail++] = i + w; }
+  }
+  const quad = [tl, tr, br, bl].map(function (pt) {
+    return [pt[0] * gray.kx, pt[1] * gray.ky];
+  });
+  return { found: true, quad: quad, fill: frac };
+}
+
+/** Площадь четырёхугольника (формула площади Гаусса). */
+function quadArea(q) {
+  let a = 0;
+  for (let i = 0; i < 4; i++) {
+    const p = q[i], n = q[(i + 1) % 4];
+    a += p[0] * n[1] - n[0] * p[1];
+  }
+  return Math.abs(a) / 2;
+}
+
+/** Решение системы линейных уравнений методом Гаусса с выбором ведущего. */
+function solveLinear(A, b) {
+  const n = b.length;
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    if (Math.abs(A[piv][col]) < 1e-9) return null;
+    const tA = A[col]; A[col] = A[piv]; A[piv] = tA;
+    const tb = b[col]; b[col] = b[piv]; b[piv] = tb;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = A[r][col] / A[col][col];
+      if (!f) continue;
+      for (let c = col; c < n; c++) A[r][c] -= f * A[col][c];
+      b[r] -= f * b[col];
+    }
+  }
+  const x = new Array(n);
+  for (let i = 0; i < n; i++) x[i] = b[i] / A[i][i];
+  return x;
+}
+
+/** Проективное преобразование, переводящее четыре точки src в четыре dst. */
+function solveHomography(src, dst) {
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const x = src[i][0], y = src[i][1], u = dst[i][0], v = dst[i][1];
+    A.push([x, y, 1, 0, 0, 0, -x * u, -y * u]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -x * v, -y * v]); b.push(v);
+  }
+  return solveLinear(A, b);
+}
+
+/**
+ * Выравнивание: для каждой точки листа А4 берётся точка исходного снимка
+ * (обратное отображение с билинейной выборкой — иначе на результате были бы
+ * дыры между пикселями).
+ */
+function warpToA4(canvas, quad) {
+  const sctx = canvas.getContext('2d');
+  const src = sctx.getImageData(0, 0, canvas.width, canvas.height);
+  const sd = src.data, sw = canvas.width, sh = canvas.height;
+  const rect = [[0, 0], [DOC_OUT_W - 1, 0], [DOC_OUT_W - 1, DOC_OUT_H - 1], [0, DOC_OUT_H - 1]];
+  const H = solveHomography(rect, quad);
+  if (!H) return null;
+  const out = document.createElement('canvas');
+  out.width = DOC_OUT_W; out.height = DOC_OUT_H;
+  const octx = out.getContext('2d');
+  const oimg = octx.createImageData(DOC_OUT_W, DOC_OUT_H);
+  const od = oimg.data;
+  let o = 0;
+  for (let y = 0; y < DOC_OUT_H; y++) {
+    for (let x = 0; x < DOC_OUT_W; x++, o += 4) {
+      const den = H[6] * x + H[7] * y + 1;
+      const fx = (H[0] * x + H[1] * y + H[2]) / den;
+      const fy = (H[3] * x + H[4] * y + H[5]) / den;
+      if (fx < 0 || fy < 0 || fx > sw - 1 || fy > sh - 1) {
+        od[o] = od[o + 1] = od[o + 2] = 255; od[o + 3] = 255;
+        continue;
+      }
+      const x0 = fx | 0, y0 = fy | 0;
+      const x1 = x0 + 1 < sw ? x0 + 1 : x0, y1 = y0 + 1 < sh ? y0 + 1 : y0;
+      const ax = fx - x0, ay = fy - y0;
+      const i00 = (y0 * sw + x0) * 4, i10 = (y0 * sw + x1) * 4;
+      const i01 = (y1 * sw + x0) * 4, i11 = (y1 * sw + x1) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        const top = sd[i00 + ch] + (sd[i10 + ch] - sd[i00 + ch]) * ax;
+        const bot = sd[i01 + ch] + (sd[i11 + ch] - sd[i01 + ch]) * ax;
+        od[o + ch] = top + (bot - top) * ay;
+      }
+      od[o + 3] = 255;
+    }
+  }
+  octx.putImageData(oimg, 0, 0);
+  return out;
+}
+
+/** Длина стороны четырёхугольника между двумя углами. */
+function sideLength(a, b) {
+  return Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]));
+}
+
+/**
+ * Метрики кадра. Считаются до улучшения, иначе обработка замаскировала бы брак.
+ * quad нужен, чтобы понять, во сколько раз лист пришлось растянуть до размера
+ * А4: это честнее «доли кадра», потому что не зависит от того, как повёрнут
+ * телефон, и прямо отвечает на вопрос «хватит ли пикселей на текст».
+ */
+function measureQuality(a4canvas, quad) {
+  const g = grayFrom(a4canvas, 1000);
+  const { data, w, h } = g;
+  const hist = new Uint32Array(256);
+  let sum = 0, glare = 0;
+  for (let i = 0; i < data.length; i++) {
+    sum += data[i]; hist[data[i]]++;
+    if (data[i] > 250) glare++;
+  }
+  const mean = sum / data.length;
+  /* Контраст = «бумага минус текст». Процентили здесь не годятся: текст
+     занимает считанные проценты площади листа, и любой процентиль от 5 %
+     попадает в бумагу, показывая контраст около нуля даже на чётком скане.
+     Поэтому за уровень текста берём среднее по 2 % самых тёмных точек. */
+  let acc = 0, paper = 255;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > data.length * 0.10) { paper = v; break; } }
+  const inkCount = Math.max(1, Math.round(data.length * 0.02));
+  let taken = 0, inkSum = 0;
+  for (let v = 0; v < 256 && taken < inkCount; v++) {
+    const take = Math.min(hist[v], inkCount - taken);
+    inkSum += v * take; taken += take;
+  }
+  const ink = inkSum / taken;
+  const docHeight = (sideLength(quad[0], quad[3]) + sideLength(quad[1], quad[2])) / 2;
+  // Дисперсия лапласиана: чем резче границы букв, тем она выше.
+  let lsum = 0, lsum2 = 0, n = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const lap = 4 * data[i] - data[i - 1] - data[i + 1] - data[i - w] - data[i + w];
+      lsum += lap; lsum2 += lap * lap; n++;
+    }
+  }
+  const m = lsum / n;
+  return {
+    sharpness: Math.round(lsum2 / n - m * m),
+    luminance: Math.round(mean),
+    contrast: Math.round(paper - ink),
+    glare: glare / data.length,
+    upscale: Math.round((DOC_OUT_H / Math.max(1, docHeight)) * 100) / 100
+  };
+}
+
+/** Что не так с кадром. Пустой список — снимок годен. */
+function qualityProblems(q, sheetFound) {
+  const out = [];
+  if (!sheetFound) out.push('Не вижу границ документа. Положите его на однотонный фон целиком в кадр или поправьте углы вручную.');
+  if (q.sharpness < DOC_LIMITS.sharpness) out.push('Не хватает резкости. Протрите объектив, обопритесь локтями и снимите ещё раз.');
+  if (sheetFound && q.upscale > DOC_LIMITS.upscaleMax) out.push('Документ слишком далеко — поднесите телефон ближе.');
+  if (q.luminance < DOC_LIMITS.lumMin) out.push('Темно — включите свет в кабине или выйдите на светлое место.');
+  if (q.contrast < DOC_LIMITS.contrastMin) out.push('Текст плохо различим — добавьте света и снимите ещё раз.');
+  if (q.glare > DOC_LIMITS.glareMax) out.push('Блик от лампы или солнца — измените угол съёмки.');
+  return out;
+}
+
+/**
+ * Читаемость: бумага выводится в белый, текст в тёмный, затем мягкое нерезкое
+ * маскирование. Смазанный кадр это не спасёт — только сделает читаемый текст
+ * контрастнее.
+ */
+function enhanceDoc(canvas) {
+  const ctx = canvas.getContext('2d');
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = img.data, w = canvas.width, h = canvas.height;
+
+  // Уровни: за «белое» берём 92-й процентиль яркости, за «чёрное» — 3-й.
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < d.length; i += 4) {
+    hist[(d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0]++;
+  }
+  const total = d.length / 4;
+  let acc = 0, black = 0, white = 255;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > total * 0.03) { black = v; break; } }
+  acc = 0;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > total * 0.08) { white = v; break; } }
+  if (white - black < 30) { black = 0; white = 255; }   // однотонный кадр не растягиваем
+  const scale = 255 / (white - black);
+  const lut = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v++) lut[v] = (v - black) * scale;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]];
+  }
+
+  // Нерезкое маскирование: итог = исходник + 0,6 × (исходник − размытие 3×3).
+  const src = new Uint8ClampedArray(d);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = (y * w + x) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        const p = i + ch;
+        const blur = (
+          src[p - w * 4 - 4] + 2 * src[p - w * 4] + src[p - w * 4 + 4] +
+          2 * src[p - 4]     + 4 * src[p]         + 2 * src[p + 4] +
+          src[p + w * 4 - 4] + 2 * src[p + w * 4] + src[p + w * 4 + 4]
+        ) / 16;
+        d[p] = src[p] + 0.6 * (src[p] - blur);
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+/** Весь конвейер: снимок → готовая страница + вердикт. */
+async function processDocPhoto(file) {
+  const t0 = Date.now();
+  const work = await fileToCanvas(file, DOC_WORK_SIDE);
+  const gray = grayFrom(work, DOC_DETECT_SIDE);
+  const sheet = findSheet(gray);
+  const quad = sheet.found ? sheet.quad
+    : [[0, 0], [work.width - 1, 0], [work.width - 1, work.height - 1], [0, work.height - 1]];
+  return finishDocPage(work, quad, sheet.found, t0);
+}
+
+/** Общая часть для автоматических границ и поправленных вручную. */
+function finishDocPage(work, quad, sheetFound, t0) {
+  const warped = warpToA4(work, quad);
+  if (!warped) return null;
+  const quality = measureQuality(warped, quad);
+  quality.fill = quadArea(quad) / (work.width * work.height);
+  const problems = qualityProblems(quality, sheetFound);
+  enhanceDoc(warped);
+  return {
+    work: work,
+    quad: quad,
+    sheetFound: sheetFound,
+    quality: quality,
+    problems: problems,
+    data: warped.toDataURL('image/jpeg', 0.85),
+    ms: Date.now() - (t0 || Date.now())
+  };
+}
+
+/* ---- Экраны раздела ---- */
+
+function docFileName(page, i) {
+  const d = new Date(page.created_at || Date.now());
+  const two = (n) => (n < 10 ? '0' : '') + n;
+  return 'PRIMUM_' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) +
+         '_' + (i + 1) + '.jpg';
+}
+
+/** dataURL → Blob вручную: fetch к data: запрещён политикой безопасности. */
+function dataUrlToBlob(dataUrl) {
+  const bin = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: 'image/jpeg' });
+}
+
+async function docPages() {
+  const list = await idbAll('docs').catch(() => []);
+  return list.sort((a, b) => a.created_at - b.created_at);
+}
+
+async function renderDocList() {
+  const box = $('#doc-list'), count = $('#doc-count'), share = $('#doc-share-all');
+  if (!box) return;
+  const pages = await docPages();
+  box.innerHTML = pages.map(function (p, i) {
+    return '<div class="ph" data-id="' + escapeHtml(p.id) + '">' +
+           '<img src="' + p.data + '" alt="Страница ' + (i + 1) + '">' +
+           '<button type="button" class="ph-del" data-id="' + escapeHtml(p.id) + '" ' +
+           'aria-label="Удалить страницу ' + (i + 1) + '">&#10005;</button></div>';
+  }).join('');
+  count.textContent = pages.length + ' / ' + DOC_MAX_PAGES;
+  share.disabled = pages.length === 0;
+  share.textContent = pages.length > 1 ? 'Поделиться всеми (' + pages.length + ')' : 'Поделиться';
+  $('#doc-shot').disabled = pages.length >= DOC_MAX_PAGES;
+  $('#doc-clear').hidden = pages.length === 0;
+}
+
+async function openDocs() {
+  if (!featureOn('docs')) return;
+  await renderDocList();
+  goTo('view-docs');
+}
+
+/** Снимок с камеры: обработка и переход к разбору. */
+async function onDocFile(file) {
+  const btn = $('#doc-shot');
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Обработка снимка...';
+  try {
+    const page = await processDocPhoto(file);
+    if (!page) throw new Error('warp');
+    docDraft = page;
+    showDocResult();
+  } catch (e) {
+    console.error('[PRIMUM] Снимок не обработан:', e);
+    $('#doc-hint').textContent = 'Не удалось обработать снимок. Попробуйте ещё раз.';
+  } finally {
+    btn.textContent = prev;
+    btn.disabled = false;
+  }
+}
+
+function showDocResult() {
+  const p = docDraft;
+  if (!p) return;
+  const ok = p.problems.length === 0;
+  const v = $('#doc-verdict');
+  v.className = 'doc-verdict ' + (ok ? 'good' : 'bad');
+  v.innerHTML = ok
+    ? '<div class="doc-verdict-t">Документ распознан</div>' +
+      '<div class="doc-verdict-s">Края обрезаны, читаемость поднята.</div>'
+    : '<div class="doc-verdict-t">Снимок лучше переснять</div>' +
+      '<ul class="doc-verdict-list">' +
+      p.problems.map((t) => '<li>' + escapeHtml(t) + '</li>').join('') + '</ul>';
+  $('#doc-preview-img').src = p.data;
+  // Числа нужны, чтобы подогнать пороги по реальным снимкам.
+  $('#doc-metrics').textContent =
+    'Резкость ' + p.quality.sharpness + ' (порог ' + DOC_LIMITS.sharpness + ')' +
+    ', контраст ' + p.quality.contrast +
+    ', яркость ' + p.quality.luminance +
+    ', растяжение ' + p.quality.upscale + '×' +
+    ', обработка ' + p.ms + ' мс';
+  $('#doc-keep').textContent = ok ? 'Оставить' : 'Оставить как есть';
+  goTo('view-doc-result');
+}
+
+async function keepDocPage() {
+  if (!docDraft) return;
+  const pages = await docPages();
+  if (pages.length >= DOC_MAX_PAGES) {
+    $('#doc-hint').textContent = 'Достигнут предел в ' + DOC_MAX_PAGES + ' страниц.';
+    goTo('view-docs');
+    return;
+  }
+  const page = {
+    id: 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+    data: docDraft.data,
+    created_at: Date.now(),
+    sharpness: docDraft.quality.sharpness,
+    employee: state.session ? state.session.fio : ''
+  };
+  try {
+    await idbPut('docs', page);
+    docDraft = null;
+    await renderDocList();
+    $('#doc-hint').textContent = 'Страница сохранена. Нажмите на неё, чтобы посмотреть; крестик — удалить.';
+    goTo('view-docs');
+  } catch (e) {
+    console.error('[PRIMUM] Страница не сохранена:', e);
+    $('#doc-hint').textContent = 'Не хватило места на устройстве. Удалите часть страниц.';
+    goTo('view-docs');
+  }
+}
+
+/* ---- Ручная правка углов ---- */
+
+let docCorners = null;   // углы в координатах отображаемого снимка
+
+function openDocCorners() {
+  if (!docDraft) return;
+  const box = $('#doc-edit'), img = $('#doc-edit-img');
+  const w = docDraft.work.width, h = docDraft.work.height;
+  img.src = docDraft.work.toDataURL('image/jpeg', 0.7);
+  img.onload = function () {
+    const rect = img.getBoundingClientRect();
+    const kx = rect.width / w, ky = rect.height / h;
+    docCorners = docDraft.quad.map((pt) => [pt[0] * kx, pt[1] * ky]);
+    box.querySelectorAll('.doc-h').forEach((el) => el.remove());
+    docCorners.forEach(function (pt, i) {
+      const el = document.createElement('div');
+      el.className = 'doc-h';
+      el.dataset.i = String(i);
+      box.appendChild(el);
+    });
+    paintDocCorners();
+  };
+  goTo('view-doc-corners');
+}
+
+function paintDocCorners() {
+  const box = $('#doc-edit');
+  if (!docCorners || !box) return;
+  box.querySelectorAll('.doc-h').forEach(function (el) {
+    const pt = docCorners[Number(el.dataset.i)];
+    el.style.left = pt[0] + 'px';
+    el.style.top = pt[1] + 'px';
+  });
+  const svg = $('#doc-edit-svg');
+  const img = $('#doc-edit-img').getBoundingClientRect();
+  svg.setAttribute('viewBox', '0 0 ' + img.width + ' ' + img.height);
+  svg.style.width = img.width + 'px';
+  svg.style.height = img.height + 'px';
+  svg.innerHTML = '<polygon points="' +
+    docCorners.map((p) => p[0] + ',' + p[1]).join(' ') + '"/>';
+}
+
+function applyDocCorners() {
+  if (!docDraft || !docCorners) return;
+  const img = $('#doc-edit-img').getBoundingClientRect();
+  const kx = docDraft.work.width / img.width, ky = docDraft.work.height / img.height;
+  const quad = docCorners.map((pt) => [pt[0] * kx, pt[1] * ky]);
+  const t0 = Date.now();
+  const page = finishDocPage(docDraft.work, quad, true, t0);
+  if (page) { docDraft = page; showDocResult(); }
+}
+
+/* ---- Отправка ---- */
+
+async function shareDocPages(pages) {
+  if (!pages.length) return;
+  const files = pages.map((p, i) => new File([dataUrlToBlob(p.data)], docFileName(p, i),
+                                             { type: 'image/jpeg' }));
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: files })) {
+    try { await navigator.share({ files: files, title: 'Документы' }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  // Запасной путь: браузер не умеет делиться файлами — сохраняем в загрузки.
+  files.forEach(function (f) {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement('a');
+    a.href = url; a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  });
+  $('#doc-hint').textContent = 'Отправка через меню недоступна — страницы сохранены в загрузки телефона.';
+}
+
 /* ---------- Опрос: старт и сброс ---------- */
 function startSurvey() {
   if (!featureOn('rating')) return;
@@ -1764,6 +2332,52 @@ async function init() {
     if (img) openZoom(img.src, img.alt);
   });
   on('#ho-notes', 'input', (e) => { state.handover.notes = e.target.value; });
+
+  // документы
+  on('#tile-docs', 'click', openDocs);
+  on('#doc-shot', 'click', () => $('#doc-file').click());
+  on('#doc-file', 'change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (f) onDocFile(f);
+  });
+  on('#doc-list', 'click', async (e) => {
+    const del = e.target.closest('.ph-del');
+    if (del) { await idbDel('docs', del.dataset.id).catch(() => {}); await renderDocList(); return; }
+    const img = e.target.closest('img');
+    if (img) openZoom(img.src, img.alt);
+  });
+  on('#doc-share-all', 'click', async () => { await shareDocPages(await docPages()); });
+  on('#doc-clear', 'click', async () => {
+    if (!window.confirm('Удалить все снятые страницы?')) return;
+    for (const p of await docPages()) await idbDel('docs', p.id).catch(() => {});
+    await renderDocList();
+  });
+  on('#doc-keep', 'click', keepDocPage);
+  on('#doc-retake', 'click', () => $('#doc-file').click());
+  on('#doc-corners-btn', 'click', openDocCorners);
+  on('#doc-corners-ok', 'click', applyDocCorners);
+  on('#doc-edit', 'pointerdown', (e) => {
+    const h = e.target.closest('.doc-h');
+    if (!h) return;
+    const box = $('#doc-edit').getBoundingClientRect();
+    const idx = Number(h.dataset.i);
+    h.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const img = $('#doc-edit-img').getBoundingClientRect();
+      docCorners[idx] = [
+        Math.max(0, Math.min(ev.clientX - box.left, img.width)),
+        Math.max(0, Math.min(ev.clientY - box.top, img.height))
+      ];
+      paintDocCorners();
+    };
+    const up = () => {
+      h.removeEventListener('pointermove', move);
+      h.removeEventListener('pointerup', up);
+    };
+    h.addEventListener('pointermove', move);
+    h.addEventListener('pointerup', up);
+  });
   on('#ho-same', 'change', applyHandoverSame);
   on('#ho-checks', 'click', (e) => {
     const b = e.target.closest('.cb');
