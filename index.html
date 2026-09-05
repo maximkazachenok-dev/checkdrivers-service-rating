@@ -427,17 +427,15 @@
     <!-- ЭКРАН: вход -->
     <section class="view" id="view-login">
       <div class="h1">Вход в систему</div>
-      <p class="lead">Введите фамилию и выберите себя из списка, затем укажите пароль.</p>
+      <p class="lead">Введите ФИО полностью и пароль.</p>
       <p class="banner" id="boot-status" hidden></p>
 
       <div class="ac">
-        <div class="field-label">ФИО <span class="req">*</span></div>
+        <div class="field-label">Введите ФИО <span class="req">*</span></div>
         <div class="tf">
-          <input id="in-fio" autocomplete="off" role="combobox" aria-autocomplete="list"
-                 autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="120"
-                 aria-expanded="false" placeholder="Начните вводить фамилию">
+          <input id="in-fio" autocomplete="off" autocapitalize="words" autocorrect="off"
+                 spellcheck="false" maxlength="120" placeholder="Фамилия Имя Отчество">
         </div>
-        <ul class="aclist names" id="list-fio" role="listbox" hidden></ul>
       </div>
 
       <div class="ac">

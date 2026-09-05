@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.6.0',
+  APP_VERSION: '2.6.1',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -386,17 +386,16 @@ function updateBootStatus() {
   const banner = $('#boot-status');
   const fio = $('#in-fio'), pwd = $('#in-pwd');
   if (!banner || !fio || !pwd) return;
-  // При отключённых подсказках ФИО сервер не выдаёт список сотрудников —
-  // тогда готовность к входу определяется только загрузкой справочников.
-  const ready = state.bootLoaded && (state.employees.length > 0 || !featureOn('name_hints'));
-  if (!featureOn('name_hints')) fio.placeholder = 'Введите ФИО полностью';
+  // Список сотрудников на экране входа не нужен: ФИО вводится целиком,
+  // а правильность проверяет сервер. Достаточно, чтобы загрузились справочники.
+  const ready = state.bootLoaded;
   fio.disabled = !ready;
   pwd.disabled = !ready;
   if (ready) { banner.hidden = true; }
   else if (state.bootLoading) {
     banner.hidden = false;
     banner.classList.add('banner-info');
-    banner.innerHTML = '<span>Загружаем список сотрудников...</span>';
+    banner.innerHTML = '<span>Подключаемся к серверу...</span>';
   } else {
     banner.hidden = false;
     banner.classList.remove('banner-info');
@@ -405,7 +404,7 @@ function updateBootStatus() {
         ? 'Серверная часть устарела: по адресу скрипта работает старая версия. ' +
           'Нужно обновить Code.gs и создать новую версию развёртывания, ' +
           'либо указать правильный адрес на экране «Диагностика».'
-        : 'Не удалось загрузить список сотрудников. Для первого входа нужен интернет.') + '</span>' +
+        : 'Не удалось связаться с сервером. Для первого входа нужен интернет.') + '</span>' +
       '<button type="button" class="banner-btn" id="boot-retry">Повторить</button>';
     const btn = $('#boot-retry');
     if (btn) btn.addEventListener('click', () => {
@@ -640,9 +639,11 @@ function matchEmployee(value) {
 function validateLogin() {
   const fio = ($('#in-fio').value || '').trim();
   const pwd = $('#in-pwd').value || '';
-  const ready = state.bootLoaded && (state.employees.length > 0 || !featureOn('name_hints'));
-  const nameOk = featureOn('name_hints') ? !!matchEmployee(fio) : fio.length >= 5;
-  $('#btn-login').disabled = !(ready && nameOk && pwd.length > 0);
+  const ready = state.bootLoaded;
+  // Совпадение со справочником не требуем: иначе кнопка молча оставалась бы
+  // заблокированной при малейшем расхождении, а подсказать нечем.
+  // Правильность ФИО проверяет сервер и отвечает общим «неверные ФИО или пароль».
+  $('#btn-login').disabled = !(ready && fio.length >= 5 && pwd.length > 0);
 }
 
 function validateAuthVehicle() {
@@ -760,8 +761,10 @@ async function doLogin() {
   const fioRaw = ($('#in-fio').value || '').trim();
   // Нормализация обязательна: мобильные клавиатуры искажают символы.
   const pwd = normPassword($('#in-pwd').value || '');
-  const fio = matchEmployee(fioRaw) || (featureOn('name_hints') ? null : fioRaw);
-  if (!fio) { setFieldError('#in-fio', '#err-login', 'Выберите ФИО из списка'); return; }
+  // matchEmployee приводит ФИО к виду из таблицы, если справочник загружен;
+  // иначе отправляем как введено — сервер сам нормализует регистр, «ё» и пробелы.
+  const fio = matchEmployee(fioRaw) || fioRaw;
+  if (fio.length < 5) { setFieldError('#in-fio', '#err-login', 'Введите ФИО полностью'); return; }
 
   if (!navigator.onLine) {
     setFieldError('#in-pwd', '#err-login', 'Для входа нужен интернет');
@@ -1687,7 +1690,14 @@ async function init() {
   on('#in-comment', 'input', (e) => { state.comment = e.target.value; validateRating(); });
 
   buildScale();
-  setupAutocomplete('#in-fio', '#list-fio', 'employee');
+  // Подсказок по ФИО на экране входа нет: список сотрудников никому не показывается.
+  on('#in-fio', 'input', () => {
+    setFieldError('#in-fio', '#err-login', '');
+    validateLogin();
+  });
+  on('#in-fio', 'keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); $('#in-pwd').focus(); }
+  });
   setupAutocomplete('#in-eng', '#list-eng', 'engineer');
   setupAutocomplete('#in-vehicle', '#list-vehicle', 'vehicle');
   setupAutocomplete('#in-tractor', '#list-tractor', 'tractor');
