@@ -13,10 +13,10 @@
 <meta name="theme-color" content="#2C3136">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="PRIMUM">
+<meta name="apple-mobile-web-app-title" content="Driver's assistant">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>PRIMUM</title>
+<title>Driver's assistant</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
   :root{
@@ -39,7 +39,7 @@
     padding:calc(env(safe-area-inset-top) + 18px) 22px 18px;
     display:flex; align-items:center; gap:12px;
   }
-  .app-head img.logo{height:22px;width:auto;display:block}
+  .app-head .logo-txt{font-family:'Oswald',sans-serif;font-weight:600;font-size:20px;letter-spacing:.04em;color:#fff;white-space:nowrap}
   .app-head .sub{
     font-size:11px; letter-spacing:.2em; text-transform:uppercase;
     color:rgba(255,255,255,.55); padding-left:12px; border-left:1px solid rgba(255,255,255,.18);
@@ -308,6 +308,122 @@
   }
   .cr-nav:disabled{opacity:.35;cursor:not-allowed}
   .cr-count{font-family:'Oswald';font-size:14px;color:var(--muted);letter-spacing:.06em}
+
+  /* ---------- раздел «Информация»: карточки памяток ---------- */
+  #nb-track{align-items:flex-start;overflow-y:hidden;transition:height .25s ease}
+  .iprog{display:flex;gap:3px;margin:10px 0 14px}
+  .iprog i{flex:1;height:3px;border-radius:3px;background:var(--line);transition:background .2s}
+  .iprog i.on{background:var(--red)}
+  .icard{
+    background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:20px 18px 22px;
+    display:flex;flex-direction:column;gap:13px;margin:0 1px;
+  }
+  .icard-cover{
+    background:linear-gradient(160deg,var(--graphite-deep) 0%,var(--graphite) 100%);
+    border-color:transparent;color:#fff;padding:26px 20px 26px;
+  }
+  .ikick{
+    font-family:'Oswald';font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--red);margin-bottom:-4px;
+  }
+  .icard-cover .ikick{color:#ff8a94}
+  .ititle{
+    display:flex;align-items:flex-start;gap:11px;
+    font-family:'Oswald';font-size:19px;font-weight:500;line-height:1.25;color:var(--graphite-deep);
+  }
+  .icard-cover .ititle{font-size:24px;color:#fff}
+  .inum{
+    flex-shrink:0;min-width:30px;height:30px;border-radius:9px;background:var(--red);color:#fff;
+    display:inline-flex;align-items:center;justify-content:center;font-size:17px;padding:0 8px;
+  }
+  .ih{
+    font-family:'Oswald';font-size:16px;font-weight:500;line-height:1.3;color:var(--graphite-deep);
+    padding-top:4px;
+  }
+  .icard-cover .ih{color:#fff}
+  .ip{font-size:14.5px;line-height:1.6;color:#343a40}
+  .icard-cover .ip{color:rgba(255,255,255,.88)}
+  .icard a{color:var(--red-deep);text-decoration:underline;overflow-wrap:anywhere}
+  .icard-cover a{color:#ff9aa3}
+  .icard strong{color:var(--ink);font-weight:600}
+  .icard-cover strong{color:#fff}
+
+  .il{list-style:none;display:flex;flex-direction:column;gap:10px;counter-reset:ist}
+  .il li{font-size:14.5px;line-height:1.55;color:#343a40;position:relative;padding-left:22px}
+  .icard-cover .il li{color:rgba(255,255,255,.88)}
+  .il-ul li:before{
+    content:'';position:absolute;left:4px;top:9px;width:6px;height:6px;border-radius:50%;background:var(--red);
+  }
+  .il-ol li{padding-left:36px;min-height:26px}
+  .il-ol li:before{
+    counter-increment:ist;content:counter(ist);position:absolute;left:0;top:0;
+    width:26px;height:26px;border-radius:50%;background:var(--paper);border:1.5px solid var(--red);
+    color:var(--red);font-family:'Oswald';font-size:13.5px;display:flex;align-items:center;justify-content:center;
+  }
+  .il-pins li{padding-left:28px}
+  .il-pins li:before{content:'📌';position:absolute;left:0;top:0;font-size:15px}
+  .il-check li,.il-no li{padding:11px 12px 11px 42px;border-radius:12px;background:var(--paper)}
+  .il-check li:before,.il-no li:before{
+    position:absolute;left:12px;top:11px;width:21px;height:21px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;
+  }
+  .il-check li:before{content:'✓';background:#2E9E5B}
+  .il-no li{background:#FCEDEE}
+  .il-no li:before{content:'✕';background:var(--red)}
+
+  .inote{
+    font-size:14.5px;line-height:1.55;border-radius:12px;padding:12px 14px 12px 15px;
+    border-left:4px solid;color:var(--ink);
+  }
+  .inote-info{background:#EEF3F8;border-color:#5B7FA6}
+  .inote-warn{background:#FFF4DC;border-color:#E3A21A}
+  .inote-danger{background:#FCEDEE;border-color:var(--red)}
+  .inote-ok{background:#E9F6EE;border-color:#2E9E5B}
+  .icard-cover .inote{background:rgba(255,255,255,.1);color:#fff;border-color:var(--red)}
+  .iquote{
+    font-size:14px;line-height:1.55;font-style:italic;color:#2b3035;background:#E7F5DD;
+    border-radius:4px 16px 16px 16px;padding:11px 14px;align-self:flex-start;max-width:94%;
+  }
+  .ibig{
+    font-family:'Oswald';font-size:22px;font-weight:600;line-height:1.25;text-align:center;
+    color:#fff;background:#2E9E5B;border-radius:12px;padding:14px 10px;letter-spacing:.02em;
+  }
+  .icard-cover .ibig{background:var(--red)}
+  .ichips{display:flex;flex-wrap:wrap;gap:7px}
+  .ichips span{
+    font-size:13px;font-weight:500;padding:6px 11px;border-radius:100px;
+    background:var(--paper);border:1px solid var(--line);color:var(--graphite-deep);
+  }
+  .iphones{display:flex;flex-direction:column;gap:7px}
+  .iphones a{
+    display:block;text-decoration:none;font-family:'Oswald';font-size:18px;letter-spacing:.03em;
+    color:var(--graphite-deep);background:var(--paper);border:1.5px solid var(--line);
+    border-radius:12px;padding:10px 14px;word-break:normal;
+  }
+  .iphones a:before{content:'📞';margin-right:10px;font-size:15px}
+
+  .ifig{margin:0}
+  .ifig img,.ishot img{display:block;cursor:zoom-in;background:#fff}
+  .ifig img{width:100%;height:auto;border-radius:12px;border:1px solid var(--line)}
+  .ifig figcaption{font-size:12.5px;font-weight:600;color:#5b6167;text-align:center;margin-top:7px;line-height:1.4}
+  .ishot{display:flex;justify-content:center;gap:10px}
+  .ishot img{
+    width:auto;max-width:100%;height:auto;max-height:50vh;max-height:50dvh;
+    border-radius:16px;border:1px solid var(--line);box-shadow:0 6px 18px rgba(26,29,32,.12);
+  }
+  .ishot-2 img{max-width:calc(50% - 5px);max-height:46vh;max-height:46dvh}
+  .icard-shot{padding:14px;background:var(--paper);border-color:transparent}
+  .icard-shot .ishot img{max-height:68vh;max-height:68dvh}
+  .icard-side{display:grid;grid-template-columns:minmax(0,40%) 1fr;align-items:center;column-gap:14px}
+  .icard-side .ikick{grid-column:1 / -1}
+  .icard-side .ishot img{max-height:none;box-shadow:none}
+
+  .cr-sticky{
+    position:sticky;bottom:0;z-index:5;background:var(--paper);
+    margin:0 -22px;padding:12px 22px calc(env(safe-area-inset-bottom) + 12px);
+    border-top:1px solid var(--line);margin-top:auto;
+  }
+  #view-newbie-item .carousel{margin-bottom:16px}
   .cr-hint{font-size:11.5px;color:var(--muted);text-align:center;margin-top:10px}
 
   /* ---------- приём/сдача ТС ---------- */
@@ -455,7 +571,7 @@
 <div class="app">
   <div class="app-head">
     <button class="backbtn" id="btn-head-back" aria-label="Назад" hidden>&#8592;</button>
-    <img class="logo" src="data:image/png;base64,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" alt="PRIMUM">
+    <span class="logo-txt">Driver's assistant</span>
     <span class="sub" id="head-sub">Вход</span>
     <span id="pending" hidden></span>
   </div>
@@ -504,7 +620,6 @@
 
       <div class="spacer"></div>
       <button class="btn btn-primary" id="btn-login" disabled>Войти</button>
-      <p class="fine">Доступ только для сотрудников PRIMUM.</p>
       <button class="btn-text" id="btn-diag" style="padding:10px">Диагностика</button>
     </section>
 
@@ -576,7 +691,7 @@
               <path d="M21 6.5A2.5 2.5 0 0 0 18.5 4H12v16h6.5a2.5 2.5 0 0 1 2.5 2V6.5z"/>
             </svg>
           </span>
-          <span class="tile-t">Новым сотрудникам</span>
+          <span class="tile-t">Информация</span>
         </button>
 
         <button class="tile" id="tile-handover">
@@ -676,7 +791,7 @@
     <!-- ЭКРАН: меню раздела эко-вождения -->
     <section class="view" id="view-eco">
       <div class="h1">Советы по эко-вождению</div>
-      <p class="lead">Материалы программы PRIMUM ECO DRIVER.</p>
+      <p class="lead">Материалы программы ECO DRIVER.</p>
 
       <div class="menu">
         <button class="mrow" id="eco-what">
@@ -760,7 +875,7 @@
         <div class="tf">
           <input id="in-eng" autocomplete="off" role="combobox" aria-autocomplete="list"
                  autocapitalize="none" autocorrect="off" spellcheck="false"
-                 aria-expanded="false" placeholder="Начните вводить фамилию">
+                 aria-expanded="false" placeholder="Введите фамилию полностью">
         </div>
         <ul class="aclist names" id="list-eng" role="listbox" hidden></ul>
         <p class="err" id="err-eng" role="alert" hidden></p>
@@ -810,30 +925,24 @@
       <button class="btn btn-primary" id="btn-appeal-send" disabled>Отправить обращение</button>
     </section>
 
-    <!-- ЭКРАН: меню раздела «Новым сотрудникам» -->
+    <!-- ЭКРАН: меню раздела «Информация» -->
     <section class="view" id="view-newbie">
-      <div class="h1">Новым сотрудникам</div>
-      <p class="lead">Порядок действий и памятки для водителей PRIMUM.</p>
+      <div class="h1">Информация</div>
+      <p class="lead">Порядок действий и памятки для водителей.</p>
       <div class="menu" id="newbie-menu"></div>
       <div class="spacer"></div>
     </section>
 
-    <!-- ЭКРАН: подраздел «Новым сотрудникам» (заглушка или текстовая карусель) -->
+    <!-- ЭКРАН: памятка раздела «Информация» — карусель слайдов из content.js -->
     <section class="view" id="view-newbie-item">
       <div class="h1" id="newbie-title"></div>
-      <div id="newbie-empty" hidden>
-        <div class="empty">
-          <div class="empty-t">Раздел заполняется</div>
-          <p class="empty-s">Материалы этого раздела появятся позже.<br>Следите за обновлениями приложения.</p>
-        </div>
-      </div>
-      <div class="carousel" id="nb-track" hidden></div>
-      <div class="cr-bar" id="nb-bar" hidden>
+      <div class="iprog" id="nb-prog"></div>
+      <div class="carousel" id="nb-track"></div>
+      <div class="cr-bar cr-sticky" id="nb-bar">
         <button class="cr-nav" id="nb-prev" aria-label="Назад">&#8592;</button>
         <span class="cr-count" id="nb-count">1 / 1</span>
         <button class="cr-nav" id="nb-next" aria-label="Вперёд">&#8594;</button>
       </div>
-      <div class="spacer"></div>
     </section>
 
     <!-- ЭКРАН: приём/сдача ТС -->
@@ -959,7 +1068,7 @@
              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <div class="thx-h" id="thanks-h">Спасибо<br>за ваш отзыв!</div>
-      <p id="thanks-note">Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.</p>
+      <p id="thanks-note">Ваша оценка зафиксирована и передана в службу контроля качества.</p>
       <button class="btn btn-primary" id="btn-home" style="max-width:220px">&#8592; На главную</button>
     </section>
 

@@ -262,8 +262,8 @@ const SCREENS = {
   'view-vehicle': { sub: 'Оценка ремонта',  back: 'view-home',    dots: 1, of: 3 },
   'view-rating':  { sub: 'Оценка ремонта',  back: 'view-vehicle', dots: 2, of: 3 },
   'view-thanks':  { sub: 'Оценка ремонта',  back: null,           dots: 0, of: 0 },
-  'view-newbie':      { sub: 'Новым сотрудникам', back: 'view-home',   dots: 0 },
-  'view-newbie-item': { sub: 'Новым сотрудникам', back: 'view-newbie', dots: 0 },
+  'view-newbie':      { sub: 'Информация', back: 'view-home',   dots: 0 },
+  'view-newbie-item': { sub: 'Информация', back: 'view-newbie', dots: 0 },
   'view-handover':    { sub: 'Прием/сдача ТС',    back: 'view-home',   dots: 0 },
   'view-docs':        { sub: 'Документы',          back: 'view-home',   dots: 0 },
   'view-doc-result':  { sub: 'Документы',          back: 'view-docs',   dots: 0 },
@@ -536,7 +536,7 @@ function setupAutocomplete(inputSel, listSel, kind) {
     const q = norm(input.value);
     active = -1;
     // Пока ничего не введено — подсказки не показываем.
-    if (!q) { list.hidden = true; list.innerHTML = ''; return; }
+    if (!q || kind === 'engineer') { list.hidden = true; list.innerHTML = ''; return; }
     const starts = [], contains = [];
     for (const n of source()) {
       const nn = norm(n);
@@ -933,7 +933,7 @@ async function submit() {
     await sendPayload(payload);
     await idbDel('queue', payload.client_id);
     showThanks('Спасибо<br>за ваш отзыв!',
-               'Ваша оценка зафиксирована и передана в службу контроля качества PRIMUM.',
+               'Ваша оценка зафиксирована и передана в службу контроля качества.',
                state.surveyDots, state.surveyOf);
   } catch (e) {
     console.error('[PRIMUM] Ошибка отправки:', e);
@@ -1147,7 +1147,7 @@ function setupNoZoomOnFocus() {
  * Горизонтальная карусель на CSS scroll-snap: свайп работает нативно,
  * JS нужен только для счётчика и кнопок.
  */
-function setupCarousel(trackSel, prevSel, nextSel, countSel) {
+function setupCarousel(trackSel, prevSel, nextSel, countSel, onChange) {
   const track = $(trackSel);
   const prev = $(prevSel), next = $(nextSel), count = $(countSel);
   if (!track || !prev || !next || !count) {
@@ -1164,6 +1164,7 @@ function setupCarousel(trackSel, prevSel, nextSel, countSel) {
     count.textContent = (idx + 1) + ' / ' + n;
     prev.disabled = idx <= 0;
     next.disabled = idx >= n - 1;
+    if (onChange) onChange(idx);
   }
   /** Переход к слайду по номеру — считаем от целевого индекса, а не от
    *  текущей позиции прокрутки, иначе быстрые нажатия пропускают слайды. */
@@ -1219,8 +1220,8 @@ function openEcoMedia(key) {
   carMedia.reset();
 }
 
-/** Разметка слайдов текстовой карусели. Одна и та же и для эко-вождения,
- *  и для раздела «Новым сотрудникам» — второй раз тот же код не пишем. */
+/** Разметка слайдов текстовой карусели эко-вождения.
+ *  Памятки раздела «Информация» рисует renderInfoSlides. */
 function renderTextSlides(track, slides) {
   track.innerHTML = slides.map(function (sl, i) {
     const items = sl.items.map(function (t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('');
@@ -1241,43 +1242,154 @@ function openEcoText() {
   carText.reset();
 }
 
-/* ---------- Раздел «Новым сотрудникам» ---------- */
+/* ---------- Раздел «Информация» ---------- */
 
-const NEWBIE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-  'stroke-linecap="round" stroke-linejoin="round">' +
-  '<path d="M5 4h11l3 3v13H5z"/><path d="M9 11h7M9 15h5"/></svg>';
+const INFO_ICONS = {
+  barrier:  '<path d="M4 21V9M20 21V9"/><rect x="2" y="5" width="20" height="4" rx="1"/><path d="M6 5l4 4M12 5l4 4"/>',
+  pin:      '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  passport: '<rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M9 17h6"/>',
+  fuel:     '<path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M4 11h10"/><path d="M14 8h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V9l-3-3"/>',
+  doc:      '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+  road:     '<path d="M8 3L4 21M16 3l4 18M12 4v3M12 11v3M12 18v2"/>',
+  signal:   '<path d="M4 20v-3M9 20v-7M14 20V9M19 20V4"/>',
+  location: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>'
+};
+function infoIcon(name) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+         'stroke-linecap="round" stroke-linejoin="round">' + (INFO_ICONS[name] || INFO_ICONS.doc) + '</svg>';
+}
+
+/** Пункты меню с заполненными слайдами. Пустые (slides: null) не показываем вовсе. */
+function infoItems() {
+  return (window.NEWBIE_CONTENT || []).filter(function (it) { return it.slides && it.slides.length; });
+}
+
+function slidesWord(n) {
+  const d = n % 10, h = n % 100;
+  if (d === 1 && h !== 11) return n + ' слайд';
+  if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return n + ' слайда';
+  return n + ' слайдов';
+}
 
 /** Меню раздела строится из content.js — добавить пункт можно без правок app.js. */
 function openNewbieMenu() {
   if (!featureOn('newbie')) return;
   const box = $('#newbie-menu');
   if (!box) return;
-  const list = window.NEWBIE_CONTENT || [];
-  box.innerHTML = list.map(function (it, i) {
-    const filled = !!(it.slides && it.slides.length);
-    const sub = filled ? (it.subtitle || '') : 'Раздел заполняется';
+  box.innerHTML = infoItems().map(function (it, i) {
     return '<button class="mrow" type="button" data-i="' + i + '">' +
-           '<span class="mrow-ic">' + NEWBIE_ICON + '</span>' +
+           '<span class="mrow-ic">' + infoIcon(it.icon) + '</span>' +
            '<span class="mrow-txt"><span class="mrow-t">' + escapeHtml(it.title) + '</span>' +
-           '<span class="mrow-s">' + escapeHtml(sub) + '</span></span>' +
+           '<span class="mrow-s">' + slidesWord(it.slides.length) + '</span></span>' +
            '<span class="mrow-arrow">&#8594;</span></button>';
   }).join('');
   goTo('view-newbie');
 }
 
-/** Подраздел: заглушка, пока в content.js не заполнены slides. */
+/**
+ * Разметка внутри текстов памяток: [b] [i] [u], ссылки [a], телефоны [tel], \n.
+ * Сначала экранируем весь текст, потом превращаем в теги только известные
+ * метки — так произвольный HTML из content.js на экран не попадёт.
+ */
+function infoInline(t) {
+  let s = escapeHtml(t);
+  s = s.replace(/\[(\/?)(b|i|u)\]/g, function (m, close, tag) {
+    return '<' + close + (tag === 'b' ? 'strong' : tag === 'i' ? 'em' : 'u') + '>';
+  });
+  s = s.replace(/\[a=(https:\/\/[^\]\s]+)\]([\s\S]*?)\[\/a\]/g,
+    '<a href="$1" target="_blank" rel="noopener">$2</a>');
+  s = s.replace(/\[a\](https:\/\/[^\[\s]+)\[\/a\]/g,
+    '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[tel\]([+\d][\d\s()-]*)\[\/tel\]/g, function (m, num) {
+    return '<a href="tel:' + num.replace(/[^\d+]/g, '') + '">' + num + '</a>';
+  });
+  return s.replace(/\n/g, '<br>');
+}
+
+function infoList(cls, items, start) {
+  const tag = cls === 'ol' ? 'ol' : 'ul';
+  const st = start && start > 1 ? ' start="' + start + '" style="counter-reset:ist ' + (start - 1) + '"' : '';
+  return '<' + tag + ' class="il il-' + cls + '"' + st + '>' +
+         items.map(function (t) { return '<li>' + infoInline(t) + '</li>'; }).join('') +
+         '</' + tag + '>';
+}
+
+function infoBlock(b) {
+  if (b.h) return '<div class="ih">' + infoInline(b.h) + '</div>';
+  if (b.p) return '<p class="ip">' + infoInline(b.p) + '</p>';
+  if (b.ul) return infoList('ul', b.ul);
+  if (b.ol) return infoList('ol', b.ol, b.start);
+  if (b.pins) return infoList('pins', b.pins);
+  if (b.no) return infoList('no', b.no);
+  if (b.check) return infoList('check', b.check);
+  if (b.note) return '<div class="inote inote-' + (b.tone || 'info') + '">' + infoInline(b.note) + '</div>';
+  if (b.quote) return '<div class="iquote">' + infoInline(b.quote) + '</div>';
+  if (b.big) return '<div class="ibig">' + infoInline(b.big) + '</div>';
+  if (b.chips) return '<div class="ichips">' +
+    b.chips.map(function (c) { return '<span>' + escapeHtml(c) + '</span>'; }).join('') + '</div>';
+  if (b.phones) return '<div class="iphones">' +
+    b.phones.map(function (n) { return infoInline('[tel]' + n + '[/tel]'); }).join('') + '</div>';
+  if (b.img) return '<figure class="ifig"><img src="' + escapeHtml(b.img) + '" alt="" loading="lazy">' +
+    (b.cap ? '<figcaption>' + infoInline(b.cap) + '</figcaption>' : '') + '</figure>';
+  if (b.shot) return '<div class="ishot"><img src="' + escapeHtml(b.shot) + '" alt="" loading="lazy"></div>';
+  if (b.shots) return '<div class="ishot ishot-2">' +
+    b.shots.map(function (s) { return '<img src="' + escapeHtml(s) + '" alt="" loading="lazy">'; }).join('') + '</div>';
+  return '';
+}
+
+/** Слайды памятки: карточки в стиле карусели Instagram. */
+function renderInfoSlides(track, slides) {
+  track.innerHTML = slides.map(function (sl) {
+    const onlyShot = sl.blocks.length === 1 && (sl.blocks[0].shot || sl.blocks[0].shots);
+    const cls = 'icard' + (sl.cover ? ' icard-cover' : '') + (onlyShot ? ' icard-shot' : '') +
+                (sl.layout === 'side' ? ' icard-side' : '');
+    const head =
+      (sl.kicker ? '<div class="ikick">' + infoInline(sl.kicker) + '</div>' : '') +
+      (sl.num || sl.title ? '<div class="ititle">' +
+        (sl.num ? '<span class="inum">' + escapeHtml(sl.num) + '</span>' : '') +
+        (sl.title ? '<span>' + infoInline(sl.title) + '</span>' : '') + '</div>' : '');
+    return '<div class="cslide"><div class="' + cls + '">' + head +
+           sl.blocks.map(infoBlock).join('') + '</div></div>';
+  }).join('');
+}
+
+/** Полоски прогресса над каруселью и высота ленты по текущему слайду:
+ *  иначе короткий слайд тянулся бы до высоты самого длинного. */
+let infoIdx = -1;
+function paintInfoProgress(idx) {
+  const track = $('#nb-track'), bar = $('#nb-prog');
+  if (!track || !bar) return;
+  const n = track.children.length;
+  if (bar.children.length !== n) bar.innerHTML = '<i></i>'.repeat(n);
+  Array.prototype.forEach.call(bar.children, function (el, i) { el.classList.toggle('on', i <= idx); });
+  // Пока лента едет к слайду, высоту не трогаем: любое изменение размеров
+  // заставляет scroll-snap вернуть ленту к прежнему слайду. Карусель вызовет
+  // нас ещё раз, когда прокрутка остановится.
+  if (Math.abs(track.scrollLeft - idx * track.clientWidth) > 2) return;
+  const cur = track.children[idx];
+  if (cur) track.style.height = cur.firstChild.offsetHeight + 'px';
+  if (idx === infoIdx) return;
+  infoIdx = idx;
+  // Новый слайд должен начинаться с верха, даже если предыдущий пролистали вниз.
+  const top = track.getBoundingClientRect().top;
+  if (top < 0) window.scrollBy({ top: top - 110, behavior: 'smooth' });
+}
+
 function openNewbieItem(i) {
-  const item = (window.NEWBIE_CONTENT || [])[i];
+  const item = infoItems()[i];
   if (!item) return;
-  const filled = !!(item.slides && item.slides.length);
   $('#newbie-title').textContent = item.title;
-  $('#newbie-empty').hidden = filled;
-  $('#nb-track').hidden = !filled;
-  $('#nb-bar').hidden = !filled;
-  if (filled) renderTextSlides($('#nb-track'), item.slides);
+  const track = $('#nb-track');
+  track.style.height = '';
+  renderInfoSlides(track, item.slides);
+  $('#nb-prog').innerHTML = '';
+  infoIdx = -1;
   goTo('view-newbie-item');
-  if (filled) carNewbie.reset();
+  carNewbie.reset();
+  // Картинки грузятся лениво — после загрузки высота слайда меняется.
+  track.querySelectorAll('img').forEach(function (img) {
+    img.addEventListener('load', carNewbie.update, { once: true });
+  });
 }
 
 /** Экранирование для вставки в разметку — и в текст, и в значение атрибута. */
@@ -1295,7 +1407,9 @@ function openZoom(src, alt) {
   // Ширину подбираем по пропорциям: широкую схему нужно приближать сильнее.
   img.onload = function () {
     const wide = img.naturalWidth > img.naturalHeight;
-    img.style.width = wide ? '300%' : '170%';
+    // Скриншот телефона и так вытянут по высоте — достаточно ширины экрана.
+    const phone = img.naturalHeight > img.naturalWidth * 1.6;
+    img.style.width = wide ? '300%' : phone ? '100%' : '170%';
     const box = $('#zoom-scroll');
     // Начинаем с левого верхнего угла, чтобы было видно начало схемы.
     box.scrollLeft = 0; box.scrollTop = 0;
@@ -2018,7 +2132,7 @@ function finishDocPage(work, quad, sheetFound, t0) {
 function docFileName(page, i) {
   const d = new Date(page.created_at || Date.now());
   const two = (n) => (n < 10 ? '0' : '') + n;
-  return 'PRIMUM_' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) +
+  return 'Drivers-assistant_' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) +
          '_' + (i + 1) + '.jpg';
 }
 
@@ -2308,11 +2422,15 @@ async function init() {
   on('#tile-newbie', 'click', openNewbieMenu);
   on('#tile-handover', 'click', startHandover);
 
-  // новым сотрудникам
-  carNewbie = setupCarousel('#nb-track', '#nb-prev', '#nb-next', '#nb-count');
+  // информация
+  carNewbie = setupCarousel('#nb-track', '#nb-prev', '#nb-next', '#nb-count', paintInfoProgress);
   on('#newbie-menu', 'click', (e) => {
     const row = e.target.closest('.mrow');
     if (row) openNewbieItem(Number(row.dataset.i));
+  });
+  on('#nb-track', 'click', (e) => {
+    const img = e.target.closest('img');
+    if (img) openZoom(img.src, img.alt);
   });
 
   // приём/сдача ТС

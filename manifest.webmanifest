@@ -1,7 +1,7 @@
 {
-  "name": "PRIMUM — приложение для сотрудников",
-  "short_name": "PRIMUM",
-  "description": "Оценка качества ремонта, ящик обращений и материалы по эко-вождению для сотрудников PRIMUM",
+  "name": "Driver's assistant",
+  "short_name": "Driver's assistant",
+  "description": "Оценка качества ремонта, ящик обращений и материалы по эко-вождению",
   "lang": "ru",
   "dir": "ltr",
   "start_url": "./index.html",
