@@ -721,7 +721,7 @@ function validateRating() {
 function assignedTractor() { return (state.session && state.session.tractor) || ''; }
 function assignedTrailer() { return (state.session && state.session.trailer) || ''; }
 
-/** Номера на главной: «AB 1234-7 / A 1120 C-7». */
+/** Номера на главной: «тягач: AB 1234-7 / прицеп: A 1120 C-7». */
 function paintAssignment() {
   const box = $('#home-plate');
   if (!box) return;
@@ -732,8 +732,8 @@ function paintAssignment() {
     box.hidden = false;
     return;
   }
-  box.innerHTML = escapeHtml(t || '—') +
-                  (tr ? ' <span class="sep">/</span> ' + escapeHtml(tr) : '');
+  box.innerHTML = '<span class="lbl">тягач:</span> ' + escapeHtml(t || '—') +
+                  (tr ? ' <span class="sep">/</span> <span class="lbl">прицеп:</span> ' + escapeHtml(tr) : '');
   box.hidden = false;
 }
 
