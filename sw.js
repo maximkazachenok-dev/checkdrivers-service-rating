@@ -1,5 +1,5 @@
 /* PRIMUM service worker — офлайн-оболочка + фоновая досылка ответов. */
-const CACHE = 'primum-shell-v22';
+const CACHE = 'primum-shell-v23';
 const SHELL = [
   './',
   './index.html',
@@ -14,8 +14,14 @@ const SHELL = [
   './eco-what-3.webp',
   './eco-what-4.webp',
   './eco-tips.webp',
-  // памятки раздела «Информация» — нужны офлайн: инструкция по связи
-  // открывается как раз тогда, когда интернета в телефоне нет
+];
+
+// Памятки раздела «Информация» — нужны офлайн: инструкция по связи
+// открывается как раз тогда, когда интернета в телефоне нет. Их ~75 штук,
+// поэтому при установке их НЕ качаем: одновременная загрузка всех картинок
+// на мобильном интернете забивала канал, и вход в приложение не успевал
+// дождаться ответа сервера. Страница сама просит докачать их позже, по одной.
+const INFO = [
   './info/border-1.webp',
   './info/border-2.webp',
   './info/border-3.webp',
@@ -107,6 +113,20 @@ self.addEventListener('install', (e) => {
       ))
     ).then(() => self.skipWaiting())
   );
+});
+
+/** Докачка памяток по одной, только тех, которых ещё нет в кэше. */
+async function warmInfo() {
+  const c = await caches.open(CACHE);
+  for (const url of INFO) {
+    if (await c.match(url)) continue;
+    try { await c.add(url); }
+    catch (err) { console.warn('[PRIMUM SW] Не удалось закэшировать', url, err && err.message); }
+  }
+}
+
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'warm-info') e.waitUntil(warmInfo());
 });
 
 self.addEventListener('activate', (e) => {

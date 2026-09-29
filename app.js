@@ -783,7 +783,7 @@ async function doLogin() {
   btn.textContent = 'Проверка...';
   try {
     const hash = await sha256hex(pwd);
-    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash });
+    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash }, { timeout: 30000 });
     if (data.ok && data.authorized) {
       // key — подписанный сервером сеансовый ключ: им подтверждается право
       // записывать данные. Общего токена из кода страницы для этого мало.
@@ -1088,7 +1088,7 @@ async function diagCheckLogin() {
   try {
     const hash = await sha256hex(pwd);
     const fio = matchEmployee(fioRaw) || fioRaw;
-    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash });
+    const data = await apiGet({ token: CONFIG.SHARED_TOKEN, login: fio, pwd: hash }, { timeout: 30000 });
     // Ни пароль, ни его хеш на экран не выводим: экран диагностики может
     // оказаться на виду у посторонних.
     diagOut('ФИО передано: ' + fio +
@@ -2609,5 +2609,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    // Картинки раздела «Информация» докачиваются в кэш с задержкой, чтобы не
+    // мешать входу и загрузке справочников на медленном мобильном интернете.
+    setTimeout(() => {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.active) reg.active.postMessage({ type: 'warm-info' });
+      }).catch(() => {});
+    }, 20000);
+  });
 }
