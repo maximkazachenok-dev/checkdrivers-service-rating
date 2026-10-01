@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.7.0',
+  APP_VERSION: '2.7.1',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -165,7 +165,7 @@ const state = {
   vehicleAssigned: false,
   surveyDots: 0, surveyOf: 0,
   // обращение
-  engineer: '', vehicle: '', topic: '', topicCustom: '', message: '',
+  vehicle: '', topic: '', topicCustom: '', message: '',
   // приём/сдача ТС
   handover: { kind: '', tractor: '', trailer: '', notes: '', photos: [] }
 };
@@ -256,12 +256,12 @@ const SCREENS = {
   'view-home':    { sub: 'Главная',         back: null,           dots: 0 },
   'view-appeal':  { sub: 'Ящик обращений',  back: 'view-home',    dots: 0 },
   'view-diag':    { sub: 'Диагностика',     back: 'view-login',   dots: 0 },
-  'view-eco':     { sub: 'Эко-вождение',    back: 'view-home',    dots: 0 },
-  'view-eco-media': { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
-  'view-eco-text':  { sub: 'Эко-вождение',  back: 'view-eco',     dots: 0 },
-  'view-vehicle': { sub: 'Оценка ремонта',  back: 'view-home',    dots: 1, of: 3 },
-  'view-rating':  { sub: 'Оценка ремонта',  back: 'view-vehicle', dots: 2, of: 3 },
-  'view-thanks':  { sub: 'Оценка ремонта',  back: null,           dots: 0, of: 0 },
+  'view-eco':     { sub: 'Советы по эко-вождению',    back: 'view-home',    dots: 0 },
+  'view-eco-media': { sub: 'Советы по эко-вождению',  back: 'view-eco',     dots: 0 },
+  'view-eco-text':  { sub: 'Советы по эко-вождению',  back: 'view-eco',     dots: 0 },
+  'view-vehicle': { sub: 'Оценка качества ремонта',  back: 'view-home',    dots: 1, of: 3 },
+  'view-rating':  { sub: 'Оценка качества ремонта',  back: 'view-vehicle', dots: 2, of: 3 },
+  'view-thanks':  { sub: 'Оценка качества ремонта',  back: null,           dots: 0, of: 0 },
   'view-newbie':      { sub: 'Информация', back: 'view-home',   dots: 0 },
   'view-newbie-item': { sub: 'Информация', back: 'view-newbie', dots: 0 },
   'view-handover':    { sub: 'Прием/сдача ТС',    back: 'view-home',   dots: 0 },
@@ -433,17 +433,15 @@ function fillTopics() {
   if (current && state.topics.indexOf(current) !== -1) sel.value = current;
 }
 
-/** Состояние экрана обращений: нужны инженеры, автопарк и пункты. */
+/** Состояние экрана обращений: нужны автопарк и пункты. */
 function updateAppealStatus() {
   const banner = $('#appeal-status');
-  if (!banner || !$('#in-eng') || !$('#in-topic')) return;
+  if (!banner || !$('#in-topic')) return;
   const problems = [];
-  if (!state.engineers.length) problems.push('список инженеров');
   // Автопарк нужен только тогда, когда номер вводится вручную.
   if (!state.fleet.tractors.length && !state.vehicleAssigned) problems.push('автопарк');
   if (!state.topics.length) problems.push('пункты обращения');
   const ready = problems.length === 0;
-  $('#in-eng').disabled = !ready;
   $('#in-vehicle').disabled = !ready;
   $('#in-topic').disabled = !ready;
   $('#in-message').disabled = !ready;
@@ -511,13 +509,12 @@ function setupAutocomplete(inputSel, listSel, kind) {
   if (!input || !list) { missingEls.push(inputSel + '/' + listSel); return; }
   let active = -1;
 
-  const isPlate = kind !== 'employee' && kind !== 'engineer';
+  const isPlate = kind !== 'employee';
   const norm = isPlate ? normPlate : normName;
 
   function source() {
     if (kind === 'tractor' || kind === 'vehicle' || kind === 'ho-tractor') return state.fleet.tractors;
     if (kind === 'trailer' || kind === 'ho-trailer') return state.fleet.trailers;
-    if (kind === 'engineer') return state.engineers;
     return state.employees;
   }
 
@@ -536,7 +533,7 @@ function setupAutocomplete(inputSel, listSel, kind) {
     const q = norm(input.value);
     active = -1;
     // Пока ничего не введено — подсказки не показываем.
-    if (!q || kind === 'engineer') { list.hidden = true; list.innerHTML = ''; return; }
+    if (!q) { list.hidden = true; list.innerHTML = ''; return; }
     const starts = [], contains = [];
     for (const n of source()) {
       const nn = norm(n);
@@ -550,7 +547,6 @@ function setupAutocomplete(inputSel, listSel, kind) {
     if (kind === 'tractor') state.tractor = val;
     else if (kind === 'trailer') state.trailer = val;
     else if (kind === 'vehicle') state.vehicle = val;
-    else if (kind === 'engineer') state.engineer = val;
     else if (kind === 'ho-tractor') state.handover.tractor = val;
     else if (kind === 'ho-trailer') state.handover.trailer = val;
   }
@@ -558,7 +554,7 @@ function setupAutocomplete(inputSel, listSel, kind) {
   /** Какую проверку запускать после изменения этого поля. */
   function revalidate() {
     if (kind === 'tractor' || kind === 'trailer') validateAuthVehicle();
-    else if (kind === 'vehicle' || kind === 'engineer') validateAppeal();
+    else if (kind === 'vehicle') validateAppeal();
     else if (kind === 'ho-tractor' || kind === 'ho-trailer') validateHandover();
     else validateLogin();
   }
@@ -576,7 +572,6 @@ function setupAutocomplete(inputSel, listSel, kind) {
     if (kind === 'tractor') setFieldError('#in-tractor', '#err-tractor', '');
     else if (kind === 'trailer') setFieldError('#in-trailer', '#err-trailer', '');
     else if (kind === 'vehicle') setFieldError('#in-vehicle', '#err-vehicle', '');
-    else if (kind === 'engineer') setFieldError('#in-eng', '#err-eng', '');
     else if (kind === 'ho-tractor') setFieldError('#in-ho-tractor', '#err-ho-tractor', '');
     else if (kind === 'ho-trailer') setFieldError('#in-ho-trailer', '#err-ho-trailer', '');
     else setFieldError('#in-fio', '#err-login', '');
@@ -604,7 +599,7 @@ function setupAutocomplete(inputSel, listSel, kind) {
       // Ошибку показываем при уходе с поля, а не во время набора.
       if (kind === 'tractor' || kind === 'trailer') validateAuthVehicle();
       else if (kind === 'ho-tractor' || kind === 'ho-trailer') validateHandover();
-      else if (kind === 'vehicle' || kind === 'engineer') validateAppeal(true);
+      else if (kind === 'vehicle') validateAppeal(true);
     }, 150);
   });
 
@@ -619,12 +614,6 @@ function matchPlate(value, kind) {
   if (!q) return null;
   const list = kind === 'tractor' ? state.fleet.tractors : state.fleet.trailers;
   for (const n of list) if (normPlate(n) === q) return n;
-  return null;
-}
-function matchEngineer(value) {
-  const q = normName(value);
-  if (!q) return null;
-  for (const n of state.engineers) if (normName(n) === q) return n;
   return null;
 }
 function matchVehicle(value) {
@@ -663,21 +652,16 @@ function validateAuthVehicle() {
 
 /** Проверка формы обращения. showErrors — показывать ли подписи об ошибках. */
 function validateAppeal(showErrors) {
-  const engRaw = state.engineer.trim();
   const vehRaw = state.vehicle.trim();
-  const engOk = !!matchEngineer(engRaw);
   // Закреплённый номер сверять с автопарком незачем: его выдал сервер, а
   // список автопарка на устройстве может быть ещё не загружен.
   const vehOk = state.vehicleAssigned ? !!vehRaw : !!matchVehicle(vehRaw);
   if (showErrors && !state.vehicleAssigned) {
-    setFieldError('#in-eng', '#err-eng', engRaw && !engOk ? 'Инженер не найден в списке' : '');
     setFieldError('#in-vehicle', '#err-vehicle', vehRaw && !vehOk ? 'Номер не найден в автопарке' : '');
-  } else if (showErrors) {
-    setFieldError('#in-eng', '#err-eng', engRaw && !engOk ? 'Инженер не найден в списке' : '');
   }
   const customNeeded = state.topic === 'Свой вариант';
   const customOk = !customNeeded || state.topicCustom.trim().length > 0;
-  const ok = engOk && vehOk && state.topic && customOk && state.message.trim();
+  const ok = vehOk && state.topic && customOk && state.message.trim();
   $('#btn-appeal-send').disabled = !ok;
 }
 
@@ -1435,7 +1419,6 @@ async function submitAppeal() {
     kind: 'appeal',
     client_id: uuid(),
     employee: state.session ? state.session.fio : '',
-    engineer: state.engineer.trim(),
     vehicle: state.vehicle.trim(),
     topic: state.topic,
     topic_custom: state.topic === 'Свой вариант' ? state.topicCustom.trim() : '',
@@ -1482,8 +1465,7 @@ function queueMessage(e) {
 
 function startAppeal() {
   if (!featureOn('inbox')) return;
-  state.engineer = state.vehicle = state.topic = state.topicCustom = state.message = '';
-  $('#in-eng').value = '';
+  state.vehicle = state.topic = state.topicCustom = state.message = '';
   $('#in-vehicle').value = '';
 
   // Закреплённый тягач подставляется вместо поля ввода.
@@ -1498,7 +1480,6 @@ function startAppeal() {
   $('#in-topic-custom').value = '';
   $('#in-message').value = '';
   $('#wrap-topic-custom').hidden = true;
-  setFieldError('#in-eng', '#err-eng', '');
   setFieldError('#in-vehicle', '#err-vehicle', '');
   fillTopics();
   updateAppealStatus();
@@ -2380,7 +2361,6 @@ async function init() {
   on('#in-fio', 'keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); $('#in-pwd').focus(); }
   });
-  setupAutocomplete('#in-eng', '#list-eng', 'engineer');
   setupAutocomplete('#in-vehicle', '#list-vehicle', 'vehicle');
   setupAutocomplete('#in-tractor', '#list-tractor', 'tractor');
   setupAutocomplete('#in-trailer', '#list-trailer', 'trailer');
