@@ -18,259 +18,470 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <title>Driver's assistant</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Oswald:wght@400;500;600&display=swap');
+
+  /* ==========================================================
+     Дизайн-система.
+     Палитра фирменная и прежняя: графит + красный. Всё остальное —
+     полупрозрачные производные тех же цветов.
+     Шрифты: Golos Text — интерфейс (сделан для экранов, крупный глаз
+     букв, хорошо читается мелким кеглем и на солнце); Oswald — логотип,
+     госномера и цифры.
+     Минимум для удобства в любом возрасте: основной текст 16 px,
+     вторичный не мельче 13 px, зона нажатия не меньше 44–48 px.
+     Иконки нарисованы по мотивам набора Lucide (лицензия ISC).
+     ========================================================== */
   :root{
     --graphite:#42484F; --graphite-deep:#2C3136; --ink:#1A1D20;
     --red:#D6303F; --red-deep:#A5202B; --paper:#F4F5F6; --line:#E1E3E5;
     --muted:#8A8F94; --white:#FFFFFF;
+
+    --text-2:#5B6167;                  /* вторичный текст: контраст 6:1 к белому */
+    --red-soft:rgba(214,48,63,.09);    /* подложка иконок */
+    --red-ring:rgba(214,48,63,.18);    /* ореол поля с ошибкой */
+    --ring:rgba(66,72,79,.14);         /* ореол поля в фокусе */
+    --card-border:rgba(225,227,229,.9);
+    --shadow-1:0 1px 2px rgba(26,29,32,.05), 0 8px 20px -12px rgba(26,29,32,.2);
+    --shadow-2:0 2px 4px rgba(26,29,32,.06), 0 18px 36px -16px rgba(26,29,32,.34);
+
+    --r-sm:12px; --r-md:16px; --r-lg:22px;
+    --gutter:20px;
+    --pad-top:24px;
+    --pad-bottom:calc(env(safe-area-inset-bottom) + 20px);
+    --ui:'Golos Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --num:'Oswald', 'Arial Narrow', sans-serif;
+    --ease:cubic-bezier(.2,.7,.2,1);
   }
+
   *{box-sizing:border-box;margin:0;padding:0}
+  /* hidden должен побеждать display любого класса. Без этого скрытые кодом
+     элементы (плитки, баннеры, переключатель «мои ТС») оставались на экране. */
+  [hidden]{display:none !important}
   html,body{height:100%}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   body{
-    font-family:'Inter',sans-serif; color:var(--ink);
-    background:linear-gradient(180deg,#33383e 0%, #23272b 100%);
+    font-family:var(--ui); font-size:16px; line-height:1.45; color:var(--ink);
+    background:#24282C;
     -webkit-font-smoothing:antialiased; overscroll-behavior:none;
   }
-  .app{max-width:480px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;background:var(--paper)}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{-webkit-tap-highlight-color:transparent}
+  :focus-visible{outline:3px solid rgba(214,48,63,.45);outline-offset:2px}
+  .app{
+    max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;
+    display:flex;flex-direction:column;background:var(--paper);
+  }
 
-  /* ---------- header ---------- */
+  /* ---------- шапка ---------- */
   .app-head{
-    background:var(--graphite-deep); color:#fff;
-    padding:calc(env(safe-area-inset-top) + 18px) 22px 18px;
-    display:flex; align-items:center; gap:12px;
+    position:sticky;top:0;z-index:50;
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;
+    min-height:calc(env(safe-area-inset-top) + 66px);
+    padding:calc(env(safe-area-inset-top) + 12px) var(--gutter) 12px;
+    background:var(--graphite-deep);color:#fff;
   }
-  .app-head .logo-txt{font-family:'Oswald',sans-serif;font-weight:600;font-size:20px;letter-spacing:.04em;color:var(--red);white-space:nowrap}
-  .app-head .sub{
-    font-size:10.5px; letter-spacing:.06em; line-height:1.35; text-transform:uppercase;
-    color:rgba(255,255,255,.55); padding-left:12px; border-left:1px solid rgba(255,255,255,.18);
+  .head-txt{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}
+  .app-head .logo-txt{
+    font-family:var(--num);font-weight:600;font-size:19px;line-height:1.15;
+    letter-spacing:.03em;color:var(--red);white-space:nowrap;
   }
+  /* Название раздела — под логотипом, во всю ширину: длинные названия
+     больше не ломают шапку на три строки. */
+  .app-head .sub{font-size:13.5px;font-weight:500;line-height:1.25;color:rgba(255,255,255,.74)}
+  .app-head .sub:empty{display:none}
   .backbtn{
-    border:0;background:rgba(255,255,255,.1);color:#fff;width:30px;height:30px;
-    border-radius:9px;font-size:17px;line-height:1;cursor:pointer;flex-shrink:0;
+    flex-shrink:0;display:grid;place-items:center;width:42px;height:42px;
+    border:0;border-radius:13px;background:rgba(255,255,255,.09);color:#fff;
+    cursor:pointer;transition:background-color .15s;
   }
+  .backbtn svg{width:22px;height:22px}
+  .backbtn:active{background:rgba(255,255,255,.2)}
+  /* Неотправленные записи — отдельной строкой под логотипом: так плашка
+     не наезжает на логотип и её трудно не заметить. */
   #pending{
-    margin-left:auto;font-size:11px;font-weight:600;color:#fff;
-    background:var(--red-deep);padding:5px 11px;border-radius:100px;flex-shrink:0;
+    flex-basis:100%;display:flex;align-items:center;gap:9px;
+    padding:8px 12px;border-radius:12px;background:rgba(214,48,63,.2);color:#FFC4C9;
+    font-size:13.5px;font-weight:600;line-height:1.25;
   }
+  #pending::before{content:'';flex-shrink:0;width:8px;height:8px;border-radius:50%;background:#FF5A68;animation:blink 1.6s ease-in-out infinite}
+  @keyframes blink{50%{opacity:.3}}
+  /* Шаги опроса — полоски под шапкой: пройденные и текущий шаг красные. */
+  .navdots{flex-basis:100%;display:flex;gap:6px}
+  .navdots i{flex:1;height:4px;border-radius:4px;background:rgba(255,255,255,.14);transition:background-color .3s}
+  .navdots i.on,.navdots i:has(~ i.on){background:var(--red)}
 
-  /* ---------- views ---------- */
-  .body{flex:1;display:flex;flex-direction:column;padding:26px 22px 20px}
+  /* ---------- экраны ---------- */
+  .body{flex:1;display:flex;flex-direction:column;padding:var(--pad-top) var(--gutter) var(--pad-bottom)}
   .view{display:none;flex-direction:column;flex:1}
-  .view.active{display:flex}
+  .view.active{display:flex;animation:fade .3s var(--ease) backwards}
   .view.center{justify-content:center}
+  /* Появление экрана: блоки поднимаются по очереди. Заполнение только
+     backwards — после анимации у блока не остаётся transform, иначе
+     выпадающие подсказки уходили бы под соседние поля. */
+  .view.active > :not(.hero,.spacer,.tiles,.check){animation:rise .42s var(--ease) backwards}
+  .view.active > :nth-child(2){animation-delay:.03s}
+  .view.active > :nth-child(3){animation-delay:.06s}
+  .view.active > :nth-child(4){animation-delay:.09s}
+  .view.active > :nth-child(5){animation-delay:.12s}
+  .view.active > :nth-child(6){animation-delay:.15s}
+  .view.active > :nth-child(7){animation-delay:.18s}
+  .view.active > :nth-child(n+8){animation-delay:.21s}
+  @keyframes fade{from{opacity:0}}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}}
 
-  .h1{font-family:'Oswald';font-size:22px;color:var(--graphite-deep);margin-bottom:4px}
-  .lead{font-size:14px;line-height:1.55;color:#5b6167;margin-bottom:24px}
+  .h1{font-size:26px;font-weight:700;line-height:1.2;letter-spacing:-.02em;color:var(--ink);margin-bottom:6px}
+  .h1-gap{margin-bottom:20px}
+  .lead{font-size:15.5px;line-height:1.5;color:var(--text-2);margin-bottom:24px}
 
-  .field-label{
-    font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--graphite);
-    text-transform:uppercase;margin:0 0 8px;
+  /* ---------- герой: тёмная шапка входа и главной ----------
+     Продолжает шапку приложения вниз и скругляется. Штриховка — как на
+     иконке приложения, справа — дорога, уходящая к горизонту. */
+  .hero{
+    position:relative;isolation:isolate;overflow:hidden;
+    margin:calc(-1 * var(--pad-top)) calc(-1 * var(--gutter)) 24px;
+    padding:4px var(--gutter) 28px;
+    background:var(--graphite-deep);color:#fff;
+    border-radius:0 0 28px 28px;
   }
-  .req{color:var(--red)}
-  .hint{font-size:12px;color:var(--muted);margin:6px 0 0}
-  .err{font-size:12px;color:var(--red);margin:6px 0 0;font-weight:500}
+  .hero::before{
+    content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 1.5px,transparent 1.5px 9px);
+    -webkit-mask-image:linear-gradient(to bottom,transparent,#000 70%);
+            mask-image:linear-gradient(to bottom,transparent,#000 70%);
+  }
+  /* Свечение у горизонта целиком помещается в рисунок (viewBox с запасом
+     сверху), а верх рисунка растушёван: иначе на стыке с шапкой видна линия. */
+  .hero::after{
+    content:'';position:absolute;right:0;bottom:0;z-index:-1;width:78%;height:100%;pointer-events:none;
+    -webkit-mask-image:linear-gradient(to bottom,transparent,#000 40%);
+            mask-image:linear-gradient(to bottom,transparent,#000 40%);
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -46 300 246' preserveAspectRatio='xMaxYMax meet'%3E%3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0' stop-color='%23D6303F' stop-opacity='.55'/%3E%3Cstop offset='1' stop-color='%23D6303F' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='230' cy='26' r='70' fill='url(%23g)'/%3E%3Cg fill='none' stroke='white' stroke-opacity='.13' stroke-width='1.5'%3E%3Cpath d='M90 200L224 24'/%3E%3Cpath d='M370 200L236 24'/%3E%3C/g%3E%3Cg fill='white' fill-opacity='.17'%3E%3Cpath d='M226.8 196h6.4l-.5-28h-5.4z'/%3E%3Cpath d='M227.6 146h4.8l-.3-20h-4.2z'/%3E%3Cpath d='M228.2 110h3.6l-.3-14h-3z'/%3E%3Cpath d='M228.7 84h2.6l-.2-10h-2.2z'/%3E%3Cpath d='M229 65h2l-.1-7h-1.8z'/%3E%3Cpath d='M229.3 51h1.4l-.1-5h-1.2z'/%3E%3C/g%3E%3C/svg%3E") right bottom / contain no-repeat;
+  }
+  .hero .h1{color:#fff;font-size:30px;margin-bottom:8px}
+  .hero .lead{color:rgba(255,255,255,.72);margin:0;max-width:30ch}
+  .hero-kick{font-size:12.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#FF8A94;margin-bottom:10px}
+  .hero-login{padding-top:22px;padding-bottom:36px}
+
+  /* ---------- главная ---------- */
+  .hero-hi{font-size:15px;font-weight:500;color:rgba(255,255,255,.68);min-height:1.45em}
+  .home-greet{font-size:28px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:#fff;margin-top:2px}
+  .hero-date{font-size:14px;color:rgba(255,255,255,.52);margin-top:6px}
+  .hero-date:empty{display:none}
+  .home-plate{display:flex;flex-wrap:wrap;gap:12px 16px;margin-top:20px}
+  .veh{display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+  .veh-l{font-size:12.5px;font-weight:500;color:rgba(255,255,255,.58)}
+  .home-plate .none{
+    display:inline-flex;align-items:center;padding:9px 13px;border-radius:12px;
+    background:rgba(255,255,255,.08);font-size:14px;color:rgba(255,255,255,.75);
+  }
+
+  /* Госномер — как настоящая табличка: белое поле, рамка, крепёж. */
+  .lp{
+    position:relative;display:inline-flex;align-items:center;justify-content:center;
+    padding:4px 16px 3px;border-radius:7px;background:#fff;color:var(--ink);
+    font-family:var(--num);font-weight:500;font-size:18px;line-height:1.25;letter-spacing:.07em;
+    white-space:nowrap;
+    box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3.5px var(--ink);
+  }
+  .lp::before,.lp::after{
+    content:'';position:absolute;top:50%;width:4px;height:4px;margin-top:-2px;
+    border-radius:50%;background:#C3C7CB;
+  }
+  .lp::before{left:6px}
+  .lp::after{right:6px}
+  .hero .lp{
+    font-size:21px;padding:5px 18px 4px;
+    box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3.5px var(--ink),0 10px 20px -10px rgba(0,0,0,.7);
+  }
+
+  .home-sub{font-size:15px;font-weight:600;color:var(--graphite);margin:0 2px 12px}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tile{
+    position:relative;display:flex;flex-direction:column;align-items:flex-start;
+    min-height:132px;padding:14px 14px 15px;text-align:left;cursor:pointer;
+    background:#fff;border:1px solid var(--card-border);border-radius:var(--r-lg);
+    box-shadow:var(--shadow-1);
+    transition:transform .15s var(--ease),box-shadow .2s;
+  }
+  .tile::after{
+    content:'';position:absolute;top:20px;right:17px;width:8px;height:8px;
+    border-top:2px solid #C3C7CB;border-right:2px solid #C3C7CB;transform:rotate(45deg);
+  }
+  .tile:active{transform:scale(.97);box-shadow:0 1px 2px rgba(26,29,32,.08)}
+  .tile-ic{
+    width:44px;height:44px;border-radius:14px;background:var(--red-soft);color:var(--red);
+    display:grid;place-items:center;flex-shrink:0;margin-bottom:12px;
+  }
+  .tile-ic svg{width:23px;height:23px}
+  .tile-t{margin-top:auto;font-size:15.5px;font-weight:600;line-height:1.25;letter-spacing:-.005em;color:var(--ink)}
+  .tile-s{margin-top:3px;font-size:13px;line-height:1.35;color:var(--text-2)}
+  .view.active .tile{animation:rise .45s var(--ease) backwards}
+  .view.active .tile:nth-child(2){animation-delay:.05s}
+  .view.active .tile:nth-child(3){animation-delay:.1s}
+  .view.active .tile:nth-child(4){animation-delay:.15s}
+  .view.active .tile:nth-child(5){animation-delay:.2s}
+  .view.active .tile:nth-child(6){animation-delay:.25s}
+  /* Широкая плитка на всю строку — когда плиток нечётное число. */
+  .tile.wide{grid-column:1 / -1;min-height:auto;flex-direction:row;align-items:center;gap:14px}
+  .tile.wide .tile-ic{margin:0}
+  .tile.wide .tile-t{margin:0}
+  .soon{
+    position:absolute;top:12px;right:12px;font-size:10px;letter-spacing:.06em;font-weight:600;
+    text-transform:uppercase;color:var(--text-2);background:var(--paper);padding:3px 8px;border-radius:100px;
+  }
+  .btn-logout{margin-top:20px}
+  .btn-logout svg{width:18px;height:18px}
+
+  /* ---------- подписи, подсказки, ошибки ---------- */
+  .field-label{display:block;font-size:14px;font-weight:600;line-height:1.3;color:var(--graphite);margin:0 0 8px}
+  .req{color:var(--red);margin-left:1px}
+  .hint{font-size:13px;line-height:1.45;color:var(--text-2);margin:8px 0 0}
+  .err{display:flex;align-items:flex-start;gap:7px;font-size:13.5px;line-height:1.4;font-weight:500;color:var(--red-deep);margin:8px 0 0}
+  .err::before{
+    content:'';flex-shrink:0;width:16px;height:16px;margin-top:1px;background:currentColor;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9.5'/%3E%3Cpath d='M12 7.5v5.5M12 16.5h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9.5'/%3E%3Cpath d='M12 7.5v5.5M12 16.5h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
   .banner{
-    font-size:13px;line-height:1.5;color:var(--red-deep);background:#FDEBEC;
-    border:1px solid #F5C4C8;border-radius:10px;padding:11px 13px;margin-bottom:20px;
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;
+    font-size:14px;line-height:1.45;color:var(--red-deep);background:#FDEDEE;
+    border:1px solid #F6CDD1;border-radius:var(--r-md);padding:12px 14px;margin-bottom:20px;
   }
-  .banner.banner-info{
-    color:var(--graphite);background:var(--paper);border-color:var(--line);
+  .banner > span{flex:1 1 200px}
+  .banner-btn{
+    flex-shrink:0;min-height:40px;padding:0 14px;border:0;border-radius:10px;cursor:pointer;
+    background:#fff;color:var(--red-deep);font-size:14px;font-weight:600;
+    box-shadow:0 1px 2px rgba(165,32,43,.18);
   }
+  .banner.banner-info{color:var(--graphite);background:#fff;border-color:var(--line)}
   .banner.banner-info span:before{
-    content:'';display:inline-block;width:13px;height:13px;margin-right:8px;vertical-align:-2px;
-    border-radius:50%;border:2px solid var(--line);border-top-color:var(--graphite);
+    content:'';display:inline-block;width:14px;height:14px;margin-right:9px;vertical-align:-2px;
+    border-radius:50%;border:2px solid var(--line);border-top-color:var(--red);
     animation:spin .8s linear infinite;
   }
   @keyframes spin{to{transform:rotate(360deg)}}
 
-  /* ---------- inputs ---------- */
-  .ac{position:relative;margin-bottom:18px}
-  .tf,.pwd{border:1.5px solid var(--line);border-radius:12px;background:#fff;display:flex;align-items:stretch}
-  .tf:focus-within,.pwd:focus-within{border-color:var(--graphite)}
-  .tf.bad,.pwd.bad,.plate.bad{border-color:var(--red)}
+  /* ---------- поля ввода ---------- */
+  .ac{position:relative;margin-bottom:20px}
+  .tf,.pwd,.plate{
+    display:flex;align-items:center;min-height:56px;background:#fff;
+    border:1.5px solid var(--line);border-radius:var(--r-md);
+    transition:border-color .15s,box-shadow .15s;
+  }
+  .tf:focus-within,.pwd:focus-within,.plate:focus-within{border-color:var(--graphite);box-shadow:0 0 0 4px var(--ring)}
+  .tf.bad,.pwd.bad,.plate.bad{border-color:var(--red);box-shadow:0 0 0 4px var(--red-ring)}
+  .tf:has(input:disabled),.pwd:has(input:disabled),.plate:has(input:disabled){background:#EDEFF0;border-color:#E6E8EA}
   /* 16px — нижняя граница, при которой iOS не увеличивает масштаб при фокусе.
      Меньше ставить нельзя: экран «прыгает» и обратно сам не отдаляется. */
   .tf input,.pwd input{
-    flex:1;border:0;outline:0;padding:14px;font-family:'Inter';font-size:16px;
-    color:var(--ink);background:transparent;min-width:0;
+    flex:1;min-width:0;align-self:stretch;border:0;outline:0;background:transparent;
+    padding:0 16px;font-size:16px;color:var(--ink);
   }
+  input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}
+  input:disabled,textarea:disabled,select:disabled{cursor:not-allowed}
   .pwd button{
-    border:0;background:transparent;padding:0 14px;color:var(--muted);
-    font-size:11px;font-family:'Inter';font-weight:600;cursor:pointer;text-transform:uppercase;
-    letter-spacing:.04em;
+    flex-shrink:0;height:40px;margin-right:8px;padding:0 13px;border:0;border-radius:10px;
+    background:var(--paper);color:var(--graphite);font-size:13.5px;font-weight:600;cursor:pointer;
   }
-  .plate{display:flex;align-items:stretch;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
-  .plate:focus-within{border-color:var(--graphite)}
+  /* Поле госномера: слева значок таблички, номер печатается шрифтом номеров. */
+  .plate{padding-left:14px}
+  .plate::before{
+    content:'';flex-shrink:0;width:30px;height:20px;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20'%3E%3Crect x='1' y='1' width='28' height='18' rx='4' fill='white' stroke='%2342484F' stroke-width='1.6'/%3E%3Cpath d='M8 7v6M12.5 7v6M17 7v6M21.5 7v6' stroke='%238A8F94' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
   .input{
-    flex:1;border:0;outline:0;padding:14px;font-family:'Oswald';font-size:17px;
-    letter-spacing:.03em;color:var(--ink);background:transparent;min-width:0;
+    flex:1;min-width:0;align-self:stretch;border:0;outline:0;background:transparent;
+    padding:0 14px 0 12px;font-family:var(--num);font-weight:500;font-size:20px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--ink);
   }
-  .input:disabled,.tf input:disabled{background:#F2F3F4;cursor:not-allowed}
+  .input::placeholder{font-family:var(--ui);font-weight:400;font-size:16px;letter-spacing:0;text-transform:none}
 
   .aclist{
-    list-style:none;position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
-    background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;
-    box-shadow:0 18px 40px -20px rgba(26,29,32,.4);max-height:250px;overflow-y:auto;
+    list-style:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
+    background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:6px;
+    box-shadow:var(--shadow-2);max-height:264px;overflow-y:auto;
   }
   .aclist li{
-    padding:12px 14px;font-family:'Oswald';font-size:16px;letter-spacing:.03em;
-    color:var(--ink);cursor:pointer;border-bottom:1px solid var(--paper);
+    padding:11px 12px;border-radius:10px;font-family:var(--num);font-weight:500;font-size:18px;
+    letter-spacing:.05em;color:var(--ink);cursor:pointer;
   }
-  .aclist li:last-child{border-bottom:0}
-  .aclist li.on,.aclist li:hover{background:var(--paper);color:var(--red-deep)}
-  .aclist.names li{font-family:'Inter';font-size:14px;letter-spacing:0}
+  .aclist li.on,.aclist li:hover{background:var(--red-soft);color:var(--red-deep)}
+  .aclist.names li{font-family:var(--ui);font-weight:400;font-size:16px;letter-spacing:0}
 
   .select{
-    width:100%;border:1.5px solid var(--line);border-radius:12px;background:#fff;
-    padding:14px;font-family:'Inter';font-size:16px;color:var(--ink);
-    appearance:none;-webkit-appearance:none;margin-bottom:22px;
-    background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238A8F94' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;background-position:right 16px center;
+    display:block;width:100%;min-height:56px;margin-bottom:20px;padding:0 48px 0 16px;
+    background:#fff url("data:image/svg+xml,%3Csvg width='14' height='9' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1.5 1.5l5.5 5.5 5.5-5.5' stroke='%2342484F' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 18px center;
+    border:1.5px solid var(--line);border-radius:var(--r-md);font-size:16px;color:var(--ink);
+    appearance:none;-webkit-appearance:none;cursor:pointer;
+    transition:border-color .15s,box-shadow .15s;
   }
-  .select:focus{outline:0;border-color:var(--graphite)}
+  .select:focus{outline:0;border-color:var(--graphite);box-shadow:0 0 0 4px var(--ring)}
+  .select:invalid{color:var(--muted)}
+  .select option{color:var(--ink)}
+  .select:disabled{background-color:#EDEFF0}
 
-  .chk{
-    display:flex;align-items:center;gap:10px;margin:-4px 0 2px;cursor:pointer;
-    font-size:13.5px;line-height:1.4;color:var(--graphite);
+  .textarea{
+    display:block;width:100%;min-height:120px;margin-bottom:8px;padding:14px 16px;
+    background:#fff;border:1.5px solid var(--line);border-radius:var(--r-md);
+    font-size:16px;line-height:1.5;color:var(--ink);resize:vertical;
+    transition:border-color .15s,box-shadow .15s;
   }
-  .chk input{width:19px;height:19px;flex-shrink:0;accent-color:var(--red)}
+  .textarea:focus{outline:0;border-color:var(--graphite);box-shadow:0 0 0 4px var(--ring)}
+  .textarea:disabled{background:#EDEFF0}
+
+  /* Флажок — переключатель в карточке: поле нажатия на всю строку. */
+  .chk{
+    display:flex;align-items:center;gap:14px;min-height:58px;margin-bottom:20px;
+    padding:10px 14px 10px 16px;background:#fff;border:1.5px solid var(--line);
+    border-radius:var(--r-md);cursor:pointer;font-size:15px;line-height:1.35;color:var(--ink);
+  }
+  .chk span{flex:1}
+  .chk input{
+    order:2;flex-shrink:0;position:relative;width:50px;height:30px;margin:0;
+    appearance:none;-webkit-appearance:none;border-radius:100px;background:#CDD1D5;
+    cursor:pointer;transition:background-color .2s;
+  }
+  .chk input::before{
+    content:'';position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 3px rgba(26,29,32,.3);transition:transform .22s var(--ease);
+  }
+  .chk input:checked{background:var(--red)}
+  .chk input:checked::before{transform:translateX(20px)}
 
   /* ---------- стартовая заставка ---------- */
-  .boot{display:flex;flex-direction:column;align-items:center;gap:14px;margin:auto}
+  #view-boot{
+    margin:calc(-1 * var(--pad-top)) calc(-1 * var(--gutter)) calc(-1 * var(--pad-bottom));
+    background:var(--graphite-deep);
+  }
+  .boot{display:flex;flex-direction:column;align-items:center;gap:16px;margin:auto}
   .boot-spin{
-    width:26px;height:26px;border-radius:50%;border:3px solid var(--line);
+    width:30px;height:30px;border-radius:50%;border:3px solid rgba(255,255,255,.12);
     border-top-color:var(--red);animation:spin .8s linear infinite;
   }
-  .boot-txt{font-size:13px;color:var(--muted);letter-spacing:.02em}
+  .boot-txt{font-size:14px;color:rgba(255,255,255,.6)}
 
-  /* ---------- home tiles ---------- */
-  .home-greet{font-family:'Oswald';font-size:21px;color:var(--graphite-deep);line-height:1.2}
-  .home-sub{font-size:13px;color:var(--muted);margin:22px 0 12px}
-  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .tile{
-    position:relative;background:#fff;border:1.5px solid var(--line);border-radius:16px;
-    padding:16px 14px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;
-    min-height:134px;text-align:left;cursor:pointer;transition:transform .12s, box-shadow .15s;
-  }
-  .tile:active{transform:scale(.975)}
-  /* Отключённый администратором раздел исчезает совсем: display у класса
-     иначе перебил бы атрибут hidden. */
-  .tile[hidden]{display:none}
-  .tile-ic{
-    width:40px;height:40px;border-radius:11px;background:var(--paper);
-    display:flex;align-items:center;justify-content:center;color:var(--red);flex-shrink:0;
-  }
-  .tile-ic svg{width:22px;height:22px}
-  .tile-t{
-    font-family:'Oswald';font-size:14px;line-height:1.3;color:var(--graphite-deep);
-    letter-spacing:.01em;font-weight:500;
-  }
-  /* Широкая плитка на всю строку — когда плиток нечётное число. */
-  .tile.wide{grid-column:1 / -1;min-height:auto;flex-direction:row;align-items:center;gap:14px}
-  .soon{
-    position:absolute;top:11px;right:11px;font-size:9px;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--muted);background:var(--paper);
-    padding:3px 7px;border-radius:100px;font-weight:600;
-  }
-
-  /* Закреплённые за водителем ТС: на главной и на экранах, где номера
-     раньше вводились руками. */
-  .home-plate{
-    /* align-self обязателен: .view — колоночный флекс, иначе плашка
-       растянулась бы на всю ширину экрана вместо ширины по номерам */
-    display:inline-flex;align-self:flex-start;align-items:center;gap:9px;margin-top:9px;padding:8px 13px;
-    background:#fff;border:1.5px solid var(--line);border-radius:10px;
-    font-family:'Oswald';font-size:15px;letter-spacing:.04em;color:var(--graphite-deep);
-  }
-  .home-plate[hidden]{display:none}
-  .home-plate .sep{color:var(--line)}
-  .home-plate .lbl{font-family:'Inter';font-size:12px;letter-spacing:0;color:var(--muted);margin-right:-4px}
-  .home-plate .none{font-family:'Inter';font-size:13px;letter-spacing:0;color:var(--muted)}
+  /* ---------- госномер на экранах опроса и обращения ---------- */
   .assigned{
-    display:flex;align-items:center;gap:13px;padding:13px 15px;margin-bottom:20px;
-    background:#fff;border:1.5px solid var(--line);border-radius:12px;
+    display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:20px;
+    background:#fff;border:1px solid var(--card-border);border-radius:var(--r-lg);box-shadow:var(--shadow-1);
   }
-  .assigned[hidden]{display:none}
   .assigned-ic{
-    width:36px;height:36px;border-radius:10px;background:var(--paper);flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;color:var(--red);
+    width:44px;height:44px;border-radius:14px;background:var(--red-soft);flex-shrink:0;
+    display:grid;place-items:center;color:var(--red);
   }
-  .assigned-ic svg{width:19px;height:19px}
-  .assigned-s{
-    display:block;font-size:11px;font-weight:600;letter-spacing:.06em;
-    text-transform:uppercase;color:var(--muted);margin-bottom:3px;
-  }
-  .assigned-t{
-    display:block;font-family:'Oswald';font-size:15px;letter-spacing:.04em;
-    color:var(--graphite-deep);line-height:1.3;
-  }
+  .assigned-ic svg{width:23px;height:23px}
+  .assigned-s{display:block;font-size:13px;font-weight:500;color:var(--text-2);margin-bottom:6px}
+  .assigned-t{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-family:var(--num);font-size:18px;letter-spacing:.05em}
 
-  /* ---------- rating ---------- */
-  .rating-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px}
-  .rating-val{font-family:'Oswald';font-size:34px;font-weight:600;color:var(--red);line-height:1}
-  .rating-val small{font-size:15px;color:var(--muted);font-weight:400}
-  .scale{display:grid;grid-template-columns:repeat(11,1fr);gap:5px;margin-bottom:8px}
+  /* ---------- оценка ---------- */
+  .rate-card{
+    background:#fff;border:1px solid var(--card-border);border-radius:var(--r-lg);
+    box-shadow:var(--shadow-1);padding:16px 14px 14px;margin-bottom:22px;
+  }
+  .rating-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 2px 14px}
+  .rating-head .field-label{margin:4px 0 0}
+  .rating-box{text-align:right;flex-shrink:0}
+  .rating-val{font-family:var(--num);font-weight:600;font-size:38px;line-height:1;color:var(--red)}
+  .rating-val small{font-size:17px;font-weight:500;color:var(--muted);margin-left:1px}
+  .rating-word{font-size:13px;font-weight:600;color:var(--graphite);margin-top:5px;min-height:1.3em}
+  /* 11 оценок в два ряда (0–5 и 6–10): кнопки крупные, по ним легко попасть. */
+  .scale{display:flex;flex-wrap:wrap;gap:8px}
   .dot{
-    aspect-ratio:1;border:1.5px solid var(--line);border-radius:9px;background:#fff;
-    font-family:'Oswald';font-size:14px;color:var(--muted);cursor:pointer;padding:0;
-    display:flex;align-items:center;justify-content:center;transition:.12s;
+    flex:1 1 calc((100% - 40px) / 6 - 1px);height:52px;padding:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    background:#fff;border:1.5px solid var(--line);border-radius:14px;
+    font-family:var(--num);font-weight:500;font-size:19px;color:var(--graphite);
+    transition:transform .12s,background-color .15s,border-color .15s,color .15s,box-shadow .2s;
   }
-  .dot.on{background:var(--graphite);border-color:var(--graphite);color:#fff}
-  .dot.pick{background:var(--red);border-color:var(--red);color:#fff;transform:scale(1.08)}
-  .scale-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:22px}
-  .textarea{
-    width:100%;min-height:92px;border:1.5px solid var(--line);border-radius:12px;
-    padding:13px 14px;font-family:'Inter';font-size:16px;line-height:1.5;color:var(--ink);
-    resize:vertical;background:#fff;margin-bottom:8px;
+  .dot:nth-child(n+7){flex-basis:calc((100% - 32px) / 5 - 1px)}
+  .dot:active{transform:scale(.94)}
+  .dot.on{background:var(--red-soft);border-color:transparent;color:var(--red-deep)}
+  .dot.pick{
+    background:var(--red);border-color:var(--red);color:#fff;
+    box-shadow:0 8px 18px -8px rgba(214,48,63,.8);
   }
-  .textarea:focus{outline:0;border-color:var(--graphite)}
+  .scale-legend{display:flex;justify-content:space-between;margin:12px 2px 0;font-size:13px;color:var(--text-2)}
 
-  /* ---------- buttons ---------- */
-  .spacer{flex:1;min-height:14px}
+  /* ---------- кнопки ---------- */
+  .spacer{flex:1;min-height:20px}
   .btn{
-    width:100%;border:0;border-radius:14px;padding:16px;font-family:'Oswald';
-    font-size:16px;letter-spacing:.04em;cursor:pointer;transition:.15s;
+    display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
+    min-height:56px;padding:0 20px;border:0;border-radius:var(--r-md);cursor:pointer;
+    font-size:16.5px;font-weight:600;line-height:1.2;text-align:center;
+    transition:transform .12s var(--ease),background-color .15s,box-shadow .2s,color .15s;
   }
-  .btn-primary{background:var(--red);color:#fff}
-  .btn-primary:hover{background:var(--red-deep)}
-  .btn-primary:disabled{background:#cfd2d5;color:#fff;cursor:not-allowed}
-  .btn-ghost{background:transparent;color:var(--graphite);border:1.5px solid var(--line);margin-bottom:10px}
+  .btn svg{width:20px;height:20px;flex-shrink:0}
+  .btn:active:not(:disabled){transform:scale(.98)}
+  .btn-primary{
+    color:#fff;background:var(--red);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 10px 22px -10px rgba(214,48,63,.75);
+  }
+  .btn-primary:active:not(:disabled){background:var(--red-deep)}
+  .btn-primary:disabled{background:#E2E4E6;color:#9A9FA4;box-shadow:none;cursor:not-allowed}
+  .btn-ghost{
+    background:#fff;color:var(--graphite-deep);border:1.5px solid var(--line);
+    box-shadow:0 1px 2px rgba(26,29,32,.04);margin-bottom:10px;
+  }
+  .btn-ghost:disabled{background:#F7F8F8;color:var(--muted);cursor:not-allowed}
   .btn-text{
-    background:transparent;border:0;color:var(--muted);font-family:'Inter';font-size:13px;
-    padding:14px;cursor:pointer;width:100%;
+    display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;
+    padding:12px;border:0;background:transparent;color:var(--text-2);
+    font-size:15px;font-weight:500;cursor:pointer;
   }
-  .fine{font-size:12px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.5}
+  .btn-text:active{color:var(--ink)}
+  .fine{font-size:13px;color:var(--text-2);text-align:center;margin-top:14px;line-height:1.5}
+  .actions{display:grid;grid-template-columns:auto 1fr;gap:10px}
+  .actions .btn{margin:0}
+  .actions .btn-ghost{padding:0 18px 0 14px}
+  /* Значки на кнопках, текст которых меняет код: рисуются через ::before. */
+  .ic-cam::before,.ic-share::before{
+    content:'';flex-shrink:0;width:21px;height:21px;background:currentColor;
+    -webkit-mask:var(--ic) center / contain no-repeat;mask:var(--ic) center / contain no-repeat;
+  }
+  .ic-cam{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/%3E%3Ccircle cx='12' cy='13' r='3'/%3E%3C/svg%3E")}
+  .ic-share{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8'/%3E%3Cpath d='M16 6l-4-4-4 4'/%3E%3Cpath d='M12 2v13'/%3E%3C/svg%3E")}
+  .btn-add{border-style:dashed;border-color:#C3C7CB;background:#FAFBFB;box-shadow:none}
 
-  /* ---------- thanks ---------- */
+  /* ---------- спасибо ---------- */
   #view-thanks{align-items:center;justify-content:center;text-align:center}
   .check{
-    width:76px;height:76px;border-radius:50%;background:#fff;border:2px solid var(--red);
-    display:flex;align-items:center;justify-content:center;margin-bottom:22px;
+    width:104px;height:104px;border-radius:50%;display:grid;place-items:center;margin-bottom:28px;
+    background:var(--red);
+    box-shadow:0 0 0 12px var(--red-soft),0 0 0 24px rgba(214,48,63,.04),0 20px 40px -12px rgba(214,48,63,.6);
   }
-  .check svg{width:38px;height:38px}
-  .thx-h{font-family:'Oswald';font-size:26px;color:var(--graphite-deep);line-height:1.1;margin-bottom:12px}
-  #thanks-note{font-size:14px;line-height:1.6;color:#5b6167;max-width:32ch;margin-bottom:28px}
+  .check svg{width:48px;height:48px}
+  .check path{stroke-dasharray:24;stroke-dashoffset:0}
+  #view-thanks.active .check{animation:pop .55s cubic-bezier(.2,1.4,.4,1) backwards}
+  #view-thanks.active .check path{animation:draw .45s .3s ease-out backwards}
+  @keyframes pop{from{transform:scale(.5);opacity:0}}
+  @keyframes draw{from{stroke-dashoffset:24}}
+  .thx-h{font-size:28px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:var(--ink);margin-bottom:12px}
+  #thanks-note{font-size:15.5px;line-height:1.55;color:var(--text-2);max-width:32ch;margin-bottom:30px}
+  #btn-home{max-width:260px}
 
   /* ---------- меню раздела ---------- */
-  .menu{display:flex;flex-direction:column;gap:11px}
+  .menu{display:flex;flex-direction:column;gap:12px}
   .mrow{
-    display:flex;align-items:center;gap:14px;background:#fff;border:1.5px solid var(--line);
-    border-radius:14px;padding:15px 16px;cursor:pointer;text-align:left;width:100%;
-    transition:transform .12s;
+    display:flex;align-items:center;gap:14px;width:100%;min-height:76px;padding:14px 18px 14px 16px;
+    text-align:left;cursor:pointer;background:#fff;border:1px solid var(--card-border);
+    border-radius:var(--r-lg);box-shadow:var(--shadow-1);transition:transform .15s var(--ease);
   }
   .mrow:active{transform:scale(.985)}
   .mrow-ic{
-    width:38px;height:38px;border-radius:10px;background:var(--paper);flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;color:var(--red);
+    width:46px;height:46px;border-radius:14px;background:var(--red-soft);flex-shrink:0;
+    display:grid;place-items:center;color:var(--red);
   }
-  .mrow-ic svg{width:20px;height:20px}
+  .mrow-ic svg{width:23px;height:23px}
   .mrow-txt{flex:1;min-width:0}
   /* display:block обязателен: это span-ы, и без него название и подпись
      склеиваются в одну строку, когда название длинное. */
-  .mrow-t{display:block;font-family:'Oswald';font-size:15px;font-weight:500;color:var(--graphite-deep);line-height:1.25}
-  .mrow-s{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+  .mrow-t{display:block;font-size:16px;font-weight:600;line-height:1.3;color:var(--ink)}
+  .mrow-s{display:block;font-size:13.5px;color:var(--text-2);margin-top:3px}
   .mrow-s:empty{display:none}
-  .mrow-arrow{color:var(--muted);font-size:16px;flex-shrink:0}
+  .mrow-arrow{
+    flex-shrink:0;width:9px;height:9px;margin-right:3px;font-size:0;
+    border-top:2px solid #B9BEC3;border-right:2px solid #B9BEC3;transform:rotate(45deg);
+  }
 
   /* ---------- карусель ---------- */
   .carousel{
@@ -280,92 +491,96 @@
   .carousel::-webkit-scrollbar{display:none}
   .cslide{flex:0 0 100%;scroll-snap-align:center;min-width:0}
   .cslide img{
-    width:100%;height:auto;display:block;border-radius:14px;
+    width:100%;height:auto;display:block;border-radius:18px;
     border:1px solid var(--line);background:#fff;cursor:zoom-in;
   }
-  .tcard{
-    background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:19px 17px;
-  }
+  .tcard{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:22px 20px}
   .tnum{
-    display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;
-    border-radius:8px;background:var(--red);color:#fff;font-family:'Oswald';font-size:14px;
-    margin-bottom:11px;padding:0 7px;
+    display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;
+    padding:0 9px;margin-bottom:12px;border-radius:9px;background:var(--red);color:#fff;
+    font-family:var(--num);font-weight:500;font-size:14px;letter-spacing:.04em;
   }
-  .ttitle{font-family:'Oswald';font-size:17px;line-height:1.25;color:var(--graphite-deep);margin-bottom:13px}
-  .tlist{list-style:none;display:flex;flex-direction:column;gap:11px}
-  .tlist li{
-    font-size:13.5px;line-height:1.55;color:#42484F;padding-left:14px;position:relative;
-  }
+  .ttitle{font-size:20px;font-weight:700;line-height:1.25;letter-spacing:-.01em;color:var(--ink);margin-bottom:14px}
+  .tlist{list-style:none;display:flex;flex-direction:column;gap:12px}
+  .tlist li{font-size:15.5px;line-height:1.55;color:#343A40;padding-left:18px;position:relative}
   .tlist li:before{
-    content:'';position:absolute;left:0;top:8px;width:5px;height:5px;
-    border-radius:50%;background:var(--red);
+    content:'';position:absolute;left:2px;top:9px;width:6px;height:6px;border-radius:50%;background:var(--red);
   }
   .cr-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px}
-  /* как и у .navdots: display у класса иначе перебивает атрибут hidden */
-  .cr-bar[hidden],.carousel[hidden]{display:none}
+  /* Стрелка рисуется рамкой ::before; символ в разметке скрыт (font-size:0)
+     и остаётся только для старых версий кода. */
   .cr-nav{
-    width:46px;height:46px;border-radius:13px;border:1.5px solid var(--line);background:#fff;
-    color:var(--graphite);font-size:19px;cursor:pointer;flex-shrink:0;
+    position:relative;flex-shrink:0;width:52px;height:52px;font-size:0;
+    border:1.5px solid var(--line);border-radius:50%;background:#fff;color:var(--graphite-deep);
+    cursor:pointer;transition:transform .12s,opacity .2s;
   }
-  .cr-nav:disabled{opacity:.35;cursor:not-allowed}
-  .cr-count{font-family:'Oswald';font-size:14px;color:var(--muted);letter-spacing:.06em}
+  .cr-nav::before{
+    content:'';position:absolute;left:50%;top:50%;box-sizing:border-box;width:13px;height:13px;
+    border-top:2.4px solid currentColor;border-right:2.4px solid currentColor;
+  }
+  .cr-nav[aria-label="Назад"]::before{transform:translate(calc(-50% + 2px),-50%) rotate(-135deg)}
+  .cr-nav[aria-label="Вперёд"]::before{transform:translate(calc(-50% - 2px),-50%) rotate(45deg)}
+  .cr-nav[aria-label="Вперёд"]{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 10px 20px -10px rgba(214,48,63,.75)}
+  .cr-nav:active:not(:disabled){transform:scale(.94)}
+  .cr-nav:disabled{opacity:.35;box-shadow:none;cursor:not-allowed}
+  .cr-count{font-family:var(--num);font-weight:500;font-size:16px;color:var(--graphite);letter-spacing:.08em}
+  .cr-hint{font-size:13px;color:var(--text-2);text-align:center;margin-top:12px}
 
   /* ---------- раздел «Информация»: карточки памяток ---------- */
   #nb-track{align-items:flex-start;overflow-y:hidden;transition:height .25s ease}
-  .iprog{display:flex;gap:3px;margin:10px 0 14px}
-  .iprog i{flex:1;height:3px;border-radius:3px;background:var(--line);transition:background .2s}
+  .iprog{display:flex;gap:4px;margin:12px 0 16px}
+  .iprog i{flex:1;height:4px;border-radius:4px;background:var(--line);transition:background-color .25s}
   .iprog i.on{background:var(--red)}
   .icard{
-    background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:20px 18px 22px;
-    display:flex;flex-direction:column;gap:13px;margin:0 1px;
+    background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:22px 20px 24px;
+    display:flex;flex-direction:column;gap:14px;margin:0 1px;
   }
   .icard-cover{
-    background:linear-gradient(160deg,var(--graphite-deep) 0%,var(--graphite) 100%);
-    border-color:transparent;color:#fff;padding:26px 20px 26px;
+    border-color:transparent;color:#fff;padding:28px 22px;
+    background:
+      repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 1.5px,transparent 1.5px 9px),
+      radial-gradient(120% 80% at 100% 0%,rgba(214,48,63,.3),transparent 60%),
+      linear-gradient(160deg,var(--graphite-deep) 0%,var(--graphite) 100%);
   }
-  .ikick{
-    font-family:'Oswald';font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--red);margin-bottom:-4px;
-  }
-  .icard-cover .ikick{color:#ff8a94}
+  .ikick{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--red);margin-bottom:-4px}
+  .icard-cover .ikick{color:#FF8A94}
   .ititle{
-    display:flex;align-items:flex-start;gap:11px;
-    font-family:'Oswald';font-size:19px;font-weight:500;line-height:1.25;color:var(--graphite-deep);
+    display:flex;align-items:flex-start;gap:12px;
+    font-size:20px;font-weight:700;line-height:1.25;letter-spacing:-.01em;color:var(--ink);
   }
-  .icard-cover .ititle{font-size:24px;color:#fff}
+  .icard-cover .ititle{font-size:25px;color:#fff}
   .inum{
-    flex-shrink:0;min-width:30px;height:30px;border-radius:9px;background:var(--red);color:#fff;
-    display:inline-flex;align-items:center;justify-content:center;font-size:17px;padding:0 8px;
+    flex-shrink:0;min-width:32px;height:32px;padding:0 8px;border-radius:10px;background:var(--red);color:#fff;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:var(--num);font-weight:500;font-size:17px;letter-spacing:.02em;
   }
-  .ih{
-    font-family:'Oswald';font-size:16px;font-weight:500;line-height:1.3;color:var(--graphite-deep);
-    padding-top:4px;
-  }
+  .ih{font-size:17px;font-weight:600;line-height:1.3;color:var(--ink);padding-top:4px}
   .icard-cover .ih{color:#fff}
-  .ip{font-size:14.5px;line-height:1.6;color:#343a40}
+  .ip{font-size:15.5px;line-height:1.6;color:#343A40}
   .icard-cover .ip{color:rgba(255,255,255,.88)}
   .icard a{color:var(--red-deep);text-decoration:underline;overflow-wrap:anywhere}
   .icard-cover a{color:#ff9aa3}
   .icard strong{color:var(--ink);font-weight:600}
   .icard-cover strong{color:#fff}
 
-  .il{list-style:none;display:flex;flex-direction:column;gap:10px;counter-reset:ist}
-  .il li{font-size:14.5px;line-height:1.55;color:#343a40;position:relative;padding-left:22px}
+  .il{list-style:none;display:flex;flex-direction:column;gap:11px;counter-reset:ist}
+  .il li{font-size:15.5px;line-height:1.55;color:#343A40;position:relative;padding-left:22px}
   .icard-cover .il li{color:rgba(255,255,255,.88)}
   .il-ul li:before{
     content:'';position:absolute;left:4px;top:9px;width:6px;height:6px;border-radius:50%;background:var(--red);
   }
-  .il-ol li{padding-left:36px;min-height:26px}
+  .il-ol li{padding-left:38px;min-height:28px}
   .il-ol li:before{
-    counter-increment:ist;content:counter(ist);position:absolute;left:0;top:0;
-    width:26px;height:26px;border-radius:50%;background:var(--paper);border:1.5px solid var(--red);
-    color:var(--red);font-family:'Oswald';font-size:13.5px;display:flex;align-items:center;justify-content:center;
+    counter-increment:ist;content:counter(ist);position:absolute;left:0;top:-1px;
+    width:28px;height:28px;border-radius:50%;background:var(--red-soft);
+    color:var(--red-deep);font-family:var(--num);font-weight:500;font-size:14px;
+    display:flex;align-items:center;justify-content:center;
   }
   .il-pins li{padding-left:28px}
   .il-pins li:before{content:'📌';position:absolute;left:0;top:0;font-size:15px}
-  .il-check li,.il-no li{padding:11px 12px 11px 42px;border-radius:12px;background:var(--paper)}
+  .il-check li,.il-no li{padding:12px 14px 12px 46px;border-radius:14px;background:var(--paper)}
   .il-check li:before,.il-no li:before{
-    position:absolute;left:12px;top:11px;width:21px;height:21px;border-radius:50%;
+    position:absolute;left:13px;top:12px;width:22px;height:22px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;
   }
   .il-check li:before{content:'✓';background:#2E9E5B}
@@ -373,7 +588,7 @@
   .il-no li:before{content:'✕';background:var(--red)}
 
   .inote{
-    font-size:14.5px;line-height:1.55;border-radius:12px;padding:12px 14px 12px 15px;
+    font-size:15px;line-height:1.55;border-radius:14px;padding:13px 15px 13px 16px;
     border-left:4px solid;color:var(--ink);
   }
   .inote-info{background:#EEF3F8;border-color:#5B7FA6}
@@ -382,35 +597,36 @@
   .inote-ok{background:#E9F6EE;border-color:#2E9E5B}
   .icard-cover .inote{background:rgba(255,255,255,.1);color:#fff;border-color:var(--red)}
   .iquote{
-    font-size:14px;line-height:1.55;font-style:italic;color:#2b3035;background:#E7F5DD;
-    border-radius:4px 16px 16px 16px;padding:11px 14px;align-self:flex-start;max-width:94%;
+    font-size:15px;line-height:1.55;font-style:italic;color:#2b3035;background:#E7F5DD;
+    border-radius:4px 18px 18px 18px;padding:12px 15px;align-self:flex-start;max-width:94%;
   }
   .ibig{
-    font-family:'Oswald';font-size:22px;font-weight:600;line-height:1.25;text-align:center;
-    color:#fff;background:#2E9E5B;border-radius:12px;padding:14px 10px;letter-spacing:.02em;
+    font-family:var(--num);font-size:22px;font-weight:600;line-height:1.25;text-align:center;
+    color:#fff;background:#2E9E5B;border-radius:14px;padding:14px 10px;letter-spacing:.02em;
   }
   .icard-cover .ibig{background:var(--red)}
-  .ichips{display:flex;flex-wrap:wrap;gap:7px}
+  .ichips{display:flex;flex-wrap:wrap;gap:8px}
   .ichips span{
-    font-size:13px;font-weight:500;padding:6px 11px;border-radius:100px;
+    font-size:13.5px;font-weight:500;padding:7px 12px;border-radius:100px;
     background:var(--paper);border:1px solid var(--line);color:var(--graphite-deep);
   }
-  .iphones{display:flex;flex-direction:column;gap:7px}
+  .iphones{display:flex;flex-direction:column;gap:8px}
   .iphones a{
-    display:block;text-decoration:none;font-family:'Oswald';font-size:18px;letter-spacing:.03em;
+    display:flex;align-items:center;min-height:52px;text-decoration:none;
+    font-family:var(--num);font-weight:500;font-size:19px;letter-spacing:.03em;
     color:var(--graphite-deep);background:var(--paper);border:1.5px solid var(--line);
-    border-radius:12px;padding:10px 14px;word-break:normal;
+    border-radius:14px;padding:10px 14px;word-break:normal;
   }
-  .iphones a:before{content:'📞';margin-right:10px;font-size:15px}
+  .iphones a:before{content:'📞';margin-right:12px;font-size:16px}
 
   .ifig{margin:0}
   .ifig img,.ishot img{display:block;cursor:zoom-in;background:#fff}
-  .ifig img{width:100%;height:auto;border-radius:12px;border:1px solid var(--line)}
-  .ifig figcaption{font-size:12.5px;font-weight:600;color:#5b6167;text-align:center;margin-top:7px;line-height:1.4}
+  .ifig img{width:100%;height:auto;border-radius:14px;border:1px solid var(--line)}
+  .ifig figcaption{font-size:13px;font-weight:600;color:var(--text-2);text-align:center;margin-top:8px;line-height:1.4}
   .ishot{display:flex;justify-content:center;gap:10px}
   .ishot img{
     width:auto;max-width:100%;height:auto;max-height:50vh;max-height:50dvh;
-    border-radius:16px;border:1px solid var(--line);box-shadow:0 6px 18px rgba(26,29,32,.12);
+    border-radius:18px;border:1px solid var(--line);box-shadow:0 6px 18px rgba(26,29,32,.12);
   }
   .ishot-2 img{max-width:calc(50% - 5px);max-height:46vh;max-height:46dvh}
   .icard-shot{padding:14px;background:var(--paper);border-color:transparent}
@@ -419,163 +635,191 @@
   .icard-side .ikick{grid-column:1 / -1}
   .icard-side .ishot img{max-height:none;box-shadow:none}
 
+  /* Панель листания прилипает к низу экрана, контент виден сквозь неё. */
   .cr-sticky{
-    position:sticky;bottom:0;z-index:5;background:var(--paper);
-    margin:0 -22px;padding:12px 22px calc(env(safe-area-inset-bottom) + 12px);
-    border-top:1px solid var(--line);margin-top:auto;
+    position:sticky;bottom:0;z-index:5;
+    margin:auto calc(-1 * var(--gutter)) calc(-1 * var(--pad-bottom));
+    padding:12px var(--gutter) calc(env(safe-area-inset-bottom) + 12px);
+    background:rgba(244,245,246,.88);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    border-top:1px solid var(--line);
   }
   #view-newbie-item .carousel{margin-bottom:16px}
-  .cr-hint{font-size:11.5px;color:var(--muted);text-align:center;margin-top:10px}
 
   /* ---------- приём/сдача ТС ---------- */
-  .seg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:18px}
-  .seg-btn{
-    border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:14px 8px;
-    font-family:'Oswald';font-size:15px;letter-spacing:.03em;color:var(--graphite);cursor:pointer;
+  .seg{
+    display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin-bottom:20px;
+    background:#E7E9EB;border-radius:18px;
   }
-  .seg-btn.on{background:var(--red);border-color:var(--red);color:#fff}
-  .ph-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
-  .ph-count{font-family:'Oswald';font-size:14px;color:var(--muted);letter-spacing:.06em}
-  .ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
+  .seg-btn{
+    min-height:50px;border:0;border-radius:14px;background:transparent;cursor:pointer;
+    font-size:16px;font-weight:600;color:var(--graphite);
+    transition:background-color .2s,color .2s,box-shadow .2s;
+  }
+  .seg-btn.on{background:var(--red);color:#fff;box-shadow:0 8px 18px -10px rgba(214,48,63,.85)}
+  .ph-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .ph-count{font-family:var(--num);font-weight:500;font-size:15px;color:var(--text-2);letter-spacing:.05em}
+  .ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:2px 0 8px}
   .ph-grid:empty{display:none}
   .ph{
-    position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;
+    position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;
     border:1px solid var(--line);background:#fff;
   }
   .ph img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
   .ph-del{
-    position:absolute;top:3px;right:3px;width:21px;height:21px;padding:0;border:0;
+    position:absolute;top:5px;right:5px;width:26px;height:26px;padding:0;border:0;
     border-radius:50%;background:rgba(26,29,32,.72);color:#fff;font-size:11px;
-    line-height:21px;cursor:pointer;
+    line-height:26px;cursor:pointer;
   }
+  .ph-del::after{content:'';position:absolute;inset:-8px}
 
   /* ---------- строки проверки: комплектность и состояние ----------
      Имена классов начинаются с crow-, а не check-: класс .check уже занят
      круглой галочкой на экране «Спасибо», и совпадение схлопывало строку
-     в круг 76 px. */
-  .crows{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
-  .crow{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:13px 15px}
-  .crow-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .crow-t{font-family:'Oswald';font-size:14.5px;letter-spacing:.02em;color:var(--graphite-deep);line-height:1.25}
-  .crow-btns{display:flex;gap:8px;flex-shrink:0}
-  .cb{
-    width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line);background:#fff;
-    color:#C3C7CB;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
-    transition:.12s;
+     в круг. */
+  .cb-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:-2px 0 12px;font-size:13px;color:var(--text-2)}
+  .cb-legend span{display:inline-flex;align-items:center;gap:6px}
+  .lg{
+    width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+    font-style:normal;font-size:11px;font-weight:700;color:#fff;
   }
-  .cb svg{width:20px;height:20px}
+  .lg-ok{background:#1F7A3D}
+  .lg-warn{background:#E08A1E}
+  .lg-bad{background:var(--red)}
+  .crows{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+  .crow{
+    background:#fff;border:1.5px solid var(--card-border);border-radius:var(--r-md);
+    padding:12px 12px 12px 16px;transition:border-color .2s,background-color .2s;
+  }
+  .crow:has(.cb.on[data-st="ok"]){border-color:#B9DCC6}
+  .crow:has(.cb.on[data-st="warn"]){border-color:#F2CF9F;background:#FFFBF4}
+  .crow:has(.cb.on[data-st="bad"]){border-color:#F3C1C6;background:#FFF8F8}
+  .crow-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .crow-t{font-size:15.5px;font-weight:600;line-height:1.3;color:var(--ink)}
+  .crow-btns{display:flex;gap:6px;flex-shrink:0}
+  .cb{
+    width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:#fff;
+    color:#B9BEC3;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:transform .12s,background-color .15s,border-color .15s,color .15s;
+  }
+  .cb svg{width:21px;height:21px}
+  .cb:active{transform:scale(.92)}
   .cb.on[data-st="ok"]{background:#1F7A3D;border-color:#1F7A3D;color:#fff}
   .cb.on[data-st="warn"]{background:#E08A1E;border-color:#E08A1E;color:#fff}
   .cb.on[data-st="bad"]{background:var(--red);border-color:var(--red);color:#fff}
-  .crow-note{margin:12px 0 0;min-height:70px}
-  .crow-note[hidden]{display:none}
+  .crow-note{margin:12px 0 0;min-height:76px}
 
   /* ---------- документы ---------- */
   .doc-tip{
-    display:flex;gap:15px;align-items:flex-start;background:#fff;
-    border:1.5px solid var(--line);border-radius:14px;padding:15px;margin-bottom:18px;
+    display:flex;gap:16px;align-items:center;background:#fff;border:1px solid var(--card-border);
+    border-radius:var(--r-lg);padding:16px;margin-bottom:20px;box-shadow:var(--shadow-1);
   }
   .doc-tip-frame{
-    width:58px;height:82px;border:2px dashed var(--red);border-radius:4px;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;
-    font-family:'Oswald';font-size:13px;letter-spacing:.06em;color:var(--red);
+    width:58px;height:80px;border:2px dashed var(--red);border-radius:6px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;background:var(--red-soft);
+    font-family:var(--num);font-weight:500;font-size:15px;letter-spacing:.06em;color:var(--red);
   }
-  .doc-tip-list{
-    list-style:none;display:flex;flex-direction:column;gap:7px;
-    font-size:13px;line-height:1.45;color:#42484F;
-  }
-  .doc-tip-list li{padding-left:14px;position:relative}
+  .doc-tip-list{list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45;color:var(--graphite)}
+  .doc-tip-list li{padding-left:15px;position:relative}
   .doc-tip-list li:before{
-    content:'';position:absolute;left:0;top:7px;width:5px;height:5px;
-    border-radius:50%;background:var(--red);
+    content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--red);
   }
-  .doc-verdict{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:16px}
-  .doc-verdict.good{border-color:#1F7A3D;background:#F1F8F3}
-  .doc-verdict.bad{border-color:var(--red);background:#FDEBEC}
-  .doc-verdict-t{font-family:'Oswald';font-size:16px;line-height:1.25;color:var(--graphite-deep);margin-bottom:5px}
+  .doc-verdict{background:#fff;border:1.5px solid var(--line);border-radius:var(--r-md);padding:15px 16px;margin-bottom:16px}
+  .doc-verdict.good{border-color:#9CCBAE;background:#F1F8F3}
+  .doc-verdict.bad{border-color:#F3C1C6;background:#FDEDEE}
+  .doc-verdict-t{font-size:17px;font-weight:700;line-height:1.25;color:var(--ink);margin-bottom:5px}
   .doc-verdict.good .doc-verdict-t{color:#1F7A3D}
   .doc-verdict.bad .doc-verdict-t{color:var(--red-deep)}
-  .doc-verdict-s{font-size:13px;line-height:1.5;color:#5b6167}
+  .doc-verdict-s{font-size:14px;line-height:1.5;color:var(--text-2)}
   .doc-verdict-list{
-    list-style:none;display:flex;flex-direction:column;gap:7px;margin-top:4px;
-    font-size:13px;line-height:1.45;color:var(--red-deep);
+    list-style:none;display:flex;flex-direction:column;gap:7px;margin-top:6px;
+    font-size:14px;line-height:1.45;color:var(--red-deep);
   }
-  .doc-verdict-list li{padding-left:14px;position:relative}
+  .doc-verdict-list li{padding-left:15px;position:relative}
   .doc-verdict-list li:before{
-    content:'';position:absolute;left:0;top:7px;width:5px;height:5px;
-    border-radius:50%;background:currentColor;
+    content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:currentColor;
   }
-  .doc-preview{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:8px;margin-bottom:10px}
-  .doc-preview img{width:100%;height:auto;display:block;border-radius:8px}
+  .doc-preview{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:8px;margin-bottom:10px}
+  .doc-preview img{width:100%;height:auto;display:block;border-radius:10px}
   /* Правка углов: снимок и поверх него перетаскиваемые маркеры. */
   .doc-edit{position:relative;display:inline-block;line-height:0;align-self:center;touch-action:none}
-  .doc-edit img{max-width:100%;height:auto;display:block;border-radius:10px}
+  .doc-edit img{max-width:100%;height:auto;display:block;border-radius:12px}
   .doc-edit-svg{position:absolute;left:0;top:0;pointer-events:none}
   .doc-edit-svg polygon{fill:rgba(214,48,63,.16);stroke:var(--red);stroke-width:2}
   .doc-h{
-    position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;
-    border:2px solid #fff;background:var(--red);box-shadow:0 2px 8px rgba(26,29,32,.4);
+    position:absolute;width:32px;height:32px;margin:-16px 0 0 -16px;border-radius:50%;
+    border:3px solid #fff;background:var(--red);box-shadow:0 2px 10px rgba(26,29,32,.45);
     touch-action:none;cursor:grab;
   }
 
   /* ---------- заглушка ненаполненного раздела ---------- */
   .empty{
-    background:#fff;border:1.5px solid var(--line);border-radius:16px;
-    padding:28px 20px;text-align:center;
+    background:#fff;border:1px solid var(--card-border);border-radius:var(--r-lg);
+    padding:28px 20px;text-align:center;box-shadow:var(--shadow-1);
   }
-  .empty-t{font-family:'Oswald';font-size:17px;color:var(--graphite-deep);margin-bottom:9px}
-  .empty-s{font-size:13.5px;line-height:1.55;color:#5b6167}
+  .empty-t{font-size:18px;font-weight:700;color:var(--ink);margin-bottom:9px}
+  .empty-s{font-size:14.5px;line-height:1.55;color:var(--text-2)}
 
   /* ---------- диагностика ---------- */
-  .diag{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:14px}
+  .diag{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:4px 16px;margin-bottom:16px}
   .drow{
-    display:flex;justify-content:space-between;gap:12px;padding:9px 0;
-    border-bottom:1px solid var(--paper);font-size:13px;
+    display:flex;justify-content:space-between;gap:12px;padding:10px 0;
+    border-bottom:1px solid var(--paper);font-size:14px;
   }
   .drow:last-child{border-bottom:0}
-  .dk{color:var(--muted);flex-shrink:0}
+  .dk{color:var(--text-2);flex-shrink:0}
   .dv{color:var(--ink);text-align:right;word-break:break-word}
   .dv.good{color:#1F7A3D}
   .dv.bad{color:var(--red)}
   .diag-out{
-    background:var(--ink);color:#E8EAEC;border-radius:12px;padding:13px;
-    font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.5;
+    background:var(--ink);color:#E8EAEC;border-radius:var(--r-sm);padding:13px;
+    font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.5;
     white-space:pre-wrap;word-break:break-word;margin-bottom:16px;max-height:260px;overflow:auto;
   }
 
   /* ---------- полноэкранный просмотр ---------- */
   .zoom{position:fixed;inset:0;z-index:120;background:rgba(26,29,32,.97);display:flex;flex-direction:column}
-  .zoom[hidden]{display:none}
   .zoom-top{
-    display:flex;align-items:center;justify-content:space-between;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
     padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;color:#fff;flex-shrink:0;
   }
-  .zoom-hint{font-size:11.5px;color:rgba(255,255,255,.6)}
+  .zoom-hint{font-size:13px;color:rgba(255,255,255,.65)}
   .zoom-close{
-    border:0;background:rgba(255,255,255,.14);color:#fff;width:34px;height:34px;
-    border-radius:10px;font-size:16px;cursor:pointer;flex-shrink:0;
+    border:0;background:rgba(255,255,255,.14);color:#fff;width:44px;height:44px;
+    border-radius:13px;font-size:17px;cursor:pointer;flex-shrink:0;
   }
   .zoom-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:0 0 env(safe-area-inset-bottom)}
   .zoom-scroll img{max-width:none;height:auto;display:block}
 
-  .navdots{display:flex;gap:7px;justify-content:center;padding:16px 0 calc(env(safe-area-inset-bottom) + 16px)}
-  /* display:flex у класса перебивал бы атрибут hidden — точки висели бы на всех экранах */
-  .navdots[hidden]{display:none}
-  .navdots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block}
-  .navdots i[hidden]{display:none}
-  .navdots i.on{background:var(--red);width:20px;border-radius:100px}
-
-  @media (prefers-reduced-motion: reduce){*{transition:none !important}.banner-info span:before{animation:none}}
+  /* ---------- компьютер: приложение — «телефон» по центру ---------- */
+  @media (min-width:481px){
+    body{background:radial-gradient(120% 80% at 50% 0%,#3A4047 0%,#202327 70%)}
+    .app{box-shadow:0 0 0 1px rgba(0,0,0,.25),0 30px 80px rgba(0,0,0,.45)}
+  }
+  @media (hover:hover){
+    .tile:hover,.mrow:hover{box-shadow:var(--shadow-2)}
+    .btn-primary:hover:not(:disabled){background:var(--red-deep)}
+    .btn-ghost:hover:not(:disabled){border-color:#C9CDD1}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none !important;transition:none !important}
+  }
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="app-head">
-    <button class="backbtn" id="btn-head-back" aria-label="Назад" hidden>&#8592;</button>
-    <span class="logo-txt">Driver's assistant</span>
-    <span class="sub" id="head-sub">Вход</span>
+  <header class="app-head">
+    <button class="backbtn" id="btn-head-back" aria-label="Назад" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </button>
+    <div class="head-txt">
+      <span class="logo-txt">Driver's assistant</span>
+      <span class="sub" id="head-sub"></span>
+    </div>
     <span id="pending" hidden></span>
-  </div>
+    <div class="navdots" id="navdots" hidden><i></i><i></i><i></i></div>
+  </header>
 
   <div class="body">
 
@@ -591,12 +835,15 @@
 
     <!-- ЭКРАН: вход -->
     <section class="view" id="view-login">
-      <div class="h1">Вход в систему</div>
-      <p class="lead">Введите ФИО полностью и пароль.</p>
+      <div class="hero hero-login">
+        <div class="hero-kick">Добро пожаловать</div>
+        <div class="h1">Вход в систему</div>
+        <p class="lead">Введите ФИО полностью и пароль.</p>
+      </div>
       <p class="banner" id="boot-status" hidden></p>
 
       <div class="ac">
-        <div class="field-label">Введите ФИО <span class="req">*</span></div>
+        <label class="field-label" for="in-fio">Введите ФИО <span class="req">*</span></label>
         <div class="tf">
           <input id="in-fio" autocomplete="off" autocapitalize="words" autocorrect="off"
                  spellcheck="false" maxlength="120" placeholder="Фамилия Имя Отчество">
@@ -604,7 +851,7 @@
       </div>
 
       <div class="ac">
-        <div class="field-label">Введите пароль <span class="req">*</span></div>
+        <label class="field-label" for="in-pwd">Введите пароль <span class="req">*</span></label>
         <div class="pwd" id="wrap-pwd">
           <input id="in-pwd" type="password" autocomplete="current-password"
                  autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="200"
@@ -621,7 +868,7 @@
 
       <div class="spacer"></div>
       <button class="btn btn-primary" id="btn-login" disabled>Войти</button>
-      <button class="btn-text" id="btn-diag" style="padding:10px">Диагностика</button>
+      <button class="btn-text" id="btn-diag" style="margin-top:6px">Диагностика</button>
     </section>
 
     <!-- ЭКРАН: диагностика -->
@@ -630,8 +877,8 @@
       <p class="lead">Экран для проверки связи и настроек. Покажите его администратору, если приложение работает неправильно.</p>
       <div class="diag" id="diag-list"></div>
       <div class="diag-out" id="diag-out" hidden></div>
-      <div class="field-label">Адрес серверного скрипта</div>
-      <div class="tf" style="margin-bottom:10px">
+      <label class="field-label" for="diag-url">Адрес серверного скрипта</label>
+      <div class="tf" style="margin-bottom:12px">
         <input id="diag-url" autocomplete="off" autocapitalize="none" autocorrect="off"
                spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec">
       </div>
@@ -645,79 +892,99 @@
 
     <!-- ЭКРАН: главная -->
     <section class="view" id="view-home">
-      <div class="spacer"></div>
-      <div class="home-greet" id="greet">Здравствуйте</div>
-      <div class="home-plate" id="home-plate" hidden></div>
+      <div class="hero">
+        <div class="hero-hi" id="greet-hi"></div>
+        <div class="home-greet" id="greet">Здравствуйте</div>
+        <div class="hero-date" id="greet-date"></div>
+        <div class="home-plate" id="home-plate" hidden></div>
+      </div>
+
       <p class="home-sub">Выберите раздел</p>
 
       <div class="tiles">
         <button class="tile" id="tile-rating">
           <span class="tile-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
               <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
             </svg>
           </span>
           <span class="tile-t">Оценка качества ремонта</span>
+          <span class="tile-s">Отзыв об автосервисе</span>
         </button>
 
         <button class="tile" id="tile-inbox">
           <span class="tile-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 13h4l1.5 3h7L17 13h4"/>
-              <path d="M5 6h14l2 7v6H3v-6l2-7z"/>
+              <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
             </svg>
           </span>
           <span class="tile-t">Ящик обращений</span>
+          <span class="tile-s">Вопрос или предложение</span>
         </button>
 
         <button class="tile" id="tile-eco">
           <span class="tile-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 20A7 7 0 0 1 11 6h9v5a9 9 0 0 1-9 9z"/>
-              <path d="M4 21c2-6 6-9 12-11"/>
+              <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+              <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
             </svg>
           </span>
           <span class="tile-t">Советы по эко-вождению</span>
+          <span class="tile-s">Экономия топлива</span>
         </button>
 
         <button class="tile" id="tile-newbie">
           <span class="tile-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H12v16H5.5A2.5 2.5 0 0 0 3 22V6.5z"/>
-              <path d="M21 6.5A2.5 2.5 0 0 0 18.5 4H12v16h6.5a2.5 2.5 0 0 1 2.5 2V6.5z"/>
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
             </svg>
           </span>
           <span class="tile-t">Информация</span>
+          <span class="tile-s">Памятки для водителей</span>
         </button>
 
         <button class="tile" id="tile-handover">
           <span class="tile-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 7h11v9H3z"/><path d="M14 10h3.6l2.4 3v3h-6z"/>
-              <circle cx="7" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/>
+              <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+              <path d="M15 18H9"/>
+              <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+              <circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
             </svg>
           </span>
           <span class="tile-t">Прием/сдача ТС</span>
+          <span class="tile-s">Фото и проверка ТС</span>
         </button>
 
         <button class="tile" id="tile-docs">
           <span class="tile-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 12h5M9.5 16h3.5"/>
+              <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+              <path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/>
             </svg>
           </span>
           <span class="tile-t">Документы</span>
+          <span class="tile-s">Скан документов</span>
         </button>
       </div>
 
       <div class="spacer"></div>
-      <button class="btn-text" id="btn-logout">Выйти из аккаунта</button>
+      <button class="btn-text btn-logout" id="btn-logout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>
+        </svg>
+        Выйти из аккаунта
+      </button>
     </section>
 
     <!-- ЭКРАН: ТС (шаг 1 опроса) -->
@@ -727,7 +994,7 @@
       <p class="banner" id="fleet-status" hidden></p>
 
       <div class="ac">
-        <div class="field-label">Номер тягача <span class="req">*</span></div>
+        <label class="field-label" for="in-tractor">Номер тягача <span class="req">*</span></label>
         <div class="plate">
           <input class="input" id="in-tractor" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
@@ -737,7 +1004,7 @@
       </div>
 
       <div class="ac">
-        <div class="field-label">Номер прицепа</div>
+        <label class="field-label" for="in-trailer">Номер прицепа</label>
         <div class="plate">
           <input class="input" id="in-trailer" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер, если есть">
@@ -748,17 +1015,22 @@
       </div>
 
       <div class="spacer"></div>
-      <button class="btn btn-primary" id="btn-next" disabled>Далее &#8594;</button>
+      <button class="btn btn-primary" id="btn-next" disabled>
+        Далее
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </button>
     </section>
 
     <!-- ЭКРАН: оценка (шаг 2 опроса) -->
     <section class="view" id="view-rating">
       <div class="assigned" id="rating-vehicle" hidden>
         <span class="assigned-ic">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 7h11v9H3z"/><path d="M14 10h3.6l2.4 3v3h-6z"/>
-            <circle cx="7" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/>
+            <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/>
+            <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+            <circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
           </svg>
         </span>
         <span>
@@ -767,25 +1039,36 @@
         </span>
       </div>
 
-      <div class="field-label">Автосервис <span class="req">*</span></div>
+      <label class="field-label" for="in-service">Автосервис <span class="req">*</span></label>
       <select class="select" id="in-service" required>
         <option value="" disabled selected hidden>Выберите автосервис</option>
       </select>
 
-      <div class="rating-head">
-        <div class="field-label" style="margin:0">Оцените качество ремонта <span class="req">*</span></div>
-        <div class="rating-val" id="rating-val">&#8212;<small>/10</small></div>
+      <div class="rate-card">
+        <div class="rating-head">
+          <div class="field-label">Оцените качество ремонта <span class="req">*</span></div>
+          <div class="rating-box">
+            <div class="rating-val" id="rating-val">&#8212;<small>/10</small></div>
+            <div class="rating-word" id="rating-word"></div>
+          </div>
+        </div>
+        <div class="scale" id="scale"></div>
+        <div class="scale-legend"><span>0 — плохо</span><span>10 — отлично</span></div>
       </div>
-      <div class="scale" id="scale"></div>
-      <div class="scale-legend"><span>Плохо</span><span>Отлично</span></div>
 
-      <div class="field-label">Комментарий <span class="req">*</span></div>
+      <label class="field-label" for="in-comment">Комментарий <span class="req">*</span></label>
       <textarea class="textarea" id="in-comment" maxlength="2000"
                 placeholder="Опишите, что было выполнено, и что осталось не так"></textarea>
 
       <div class="spacer"></div>
-      <button class="btn btn-ghost" id="btn-back">&#8592; Назад</button>
-      <button class="btn btn-primary" id="btn-submit" disabled>Отправить</button>
+      <div class="actions">
+        <button class="btn btn-ghost" id="btn-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          Назад
+        </button>
+        <button class="btn btn-primary" id="btn-submit" disabled>Отправить</button>
+      </div>
     </section>
 
     <!-- ЭКРАН: меню раздела эко-вождения -->
@@ -796,9 +1079,9 @@
       <div class="menu">
         <button class="mrow" id="eco-what">
           <span class="mrow-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/>
+              <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
             </svg>
           </span>
           <span class="mrow-txt">
@@ -810,9 +1093,10 @@
 
         <button class="mrow" id="eco-tips">
           <span class="mrow-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 20A7 7 0 0 1 11 6h9v5a9 9 0 0 1-9 9z"/><path d="M4 21c2-6 6-9 12-11"/>
+              <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+              <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
             </svg>
           </span>
           <span class="mrow-txt">
@@ -824,9 +1108,10 @@
 
         <button class="mrow" id="eco-instruction">
           <span class="mrow-ic">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                  stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 4h11l3 3v13H5z"/><path d="M9 10h7M9 14h7"/>
+              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+              <path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>
             </svg>
           </span>
           <span class="mrow-txt">
@@ -843,38 +1128,37 @@
     <!-- ЭКРАН: карусель изображений -->
     <section class="view" id="view-eco-media">
       <div class="carousel" id="media-track"></div>
-      <div class="cr-bar">
+      <p class="cr-hint">Листайте влево и вправо. Нажмите на изображение, чтобы увеличить.</p>
+      <div class="cr-bar cr-sticky">
         <button class="cr-nav" id="media-prev" aria-label="Назад">&#8592;</button>
         <span class="cr-count" id="media-count">1 / 1</span>
         <button class="cr-nav" id="media-next" aria-label="Вперёд">&#8594;</button>
       </div>
-      <p class="cr-hint">Листайте влево и вправо. Нажмите на изображение, чтобы увеличить.</p>
-      <div class="spacer"></div>
     </section>
 
     <!-- ЭКРАН: текстовая карусель -->
     <section class="view" id="view-eco-text">
       <div class="carousel" id="text-track"></div>
-      <div class="cr-bar">
+      <p class="cr-hint">Листайте влево и вправо.</p>
+      <div class="cr-bar cr-sticky">
         <button class="cr-nav" id="text-prev" aria-label="Назад">&#8592;</button>
         <span class="cr-count" id="text-count">1 / 1</span>
         <button class="cr-nav" id="text-next" aria-label="Вперёд">&#8594;</button>
       </div>
-      <p class="cr-hint">Листайте влево и вправо.</p>
-      <div class="spacer"></div>
     </section>
 
     <!-- ЭКРАН: ящик обращений -->
     <section class="view" id="view-appeal">
-      <div class="h1" style="margin-bottom:20px">Ящик обращений</div>
+      <div class="h1 h1-gap">Ящик обращений</div>
       <p class="banner" id="appeal-status" hidden></p>
 
       <div class="assigned" id="appeal-vehicle" hidden>
         <span class="assigned-ic">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 7h11v9H3z"/><path d="M14 10h3.6l2.4 3v3h-6z"/>
-            <circle cx="7" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/>
+            <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/>
+            <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+            <circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
           </svg>
         </span>
         <span>
@@ -884,7 +1168,7 @@
       </div>
 
       <div class="ac" id="wrap-vehicle">
-        <div class="field-label">Гос. номер автомобиля <span class="req">*</span></div>
+        <label class="field-label" for="in-vehicle">Гос. номер автомобиля <span class="req">*</span></label>
         <div class="plate">
           <input class="input" id="in-vehicle" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" role="combobox"
                  aria-autocomplete="list" aria-expanded="false" placeholder="Введите номер">
@@ -893,19 +1177,19 @@
         <p class="err" id="err-vehicle" role="alert" hidden></p>
       </div>
 
-      <div class="field-label">Пункт обращения <span class="req">*</span></div>
+      <label class="field-label" for="in-topic">Пункт обращения <span class="req">*</span></label>
       <select class="select" id="in-topic" required>
         <option value="" disabled selected hidden>Выберите пункт</option>
       </select>
 
       <div id="wrap-topic-custom" hidden>
-        <div class="field-label">Укажите свой вариант <span class="req">*</span></div>
-        <div class="tf" style="margin-bottom:18px">
+        <label class="field-label" for="in-topic-custom">Укажите свой вариант <span class="req">*</span></label>
+        <div class="tf" style="margin-bottom:20px">
           <input id="in-topic-custom" autocomplete="off" maxlength="200" placeholder="Кратко назовите тему">
         </div>
       </div>
 
-      <div class="field-label">Описание <span class="req">*</span></div>
+      <label class="field-label" for="in-message">Описание <span class="req">*</span></label>
       <textarea class="textarea" id="in-message" maxlength="4000"
                 placeholder="Опишите вопрос, проблему или предложение"></textarea>
 
@@ -952,7 +1236,7 @@
 
       <div id="ho-plates">
         <div class="ac">
-          <div class="field-label">Номер тягача <span class="req">*</span></div>
+          <label class="field-label" for="in-ho-tractor">Номер тягача <span class="req">*</span></label>
           <div class="plate">
             <input class="input" id="in-ho-tractor" autocomplete="off" autocapitalize="characters"
                    autocorrect="off" spellcheck="false" role="combobox" maxlength="32"
@@ -963,7 +1247,7 @@
         </div>
 
         <div class="ac">
-          <div class="field-label">Номер полуприцепа</div>
+          <label class="field-label" for="in-ho-trailer">Номер полуприцепа</label>
           <div class="plate">
             <input class="input" id="in-ho-trailer" autocomplete="off" autocapitalize="characters"
                    autocorrect="off" spellcheck="false" role="combobox" maxlength="32"
@@ -979,15 +1263,20 @@
         <span class="ph-count" id="ho-count">0 / 10</span>
       </div>
       <input type="file" id="ho-file" accept="image/*" capture="environment" multiple hidden>
-      <button type="button" class="btn btn-ghost" id="ho-shot">Сделать фото</button>
       <div class="ph-grid" id="ho-photos"></div>
-      <p class="hint" id="ho-hint">До 10 снимков тягача и полуприцепа. Нажмите на снимок, чтобы увеличить, крестик — удалить.</p>
+      <button type="button" class="btn btn-ghost btn-add ic-cam" id="ho-shot">Сделать фото</button>
+      <p class="hint" id="ho-hint" style="margin-top:0">До 10 снимков тягача и полуприцепа. Нажмите на снимок, чтобы увеличить, крестик — удалить.</p>
 
-      <div class="field-label" style="margin-top:20px">Комплектность и состояние <span class="req">*</span></div>
+      <div class="field-label" style="margin-top:26px">Комплектность и состояние <span class="req">*</span></div>
+      <div class="cb-legend" aria-hidden="true">
+        <span><i class="lg lg-ok">&#10003;</i>В порядке</span>
+        <span><i class="lg lg-warn">?</i>Замечания</span>
+        <span><i class="lg lg-bad">!</i>Неисправно</span>
+      </div>
       <div class="crows" id="ho-checks"></div>
       <p class="hint" id="ho-checks-hint">Отметьте каждую строку: всё в порядке, есть замечания или неисправно.</p>
 
-      <div class="field-label" style="margin-top:20px">Замечания и неисправности</div>
+      <label class="field-label" for="ho-notes" style="margin-top:26px">Замечания и неисправности</label>
       <textarea class="textarea" id="ho-notes" maxlength="4000"
                 placeholder="Опишите повреждения, замечания и неисправности"></textarea>
 
@@ -1011,9 +1300,9 @@
       </div>
 
       <input type="file" id="doc-file" accept="image/*" capture="environment" hidden>
-      <button type="button" class="btn btn-primary" id="doc-shot">Сфотографировать документ</button>
+      <button type="button" class="btn btn-primary ic-cam" id="doc-shot">Сфотографировать документ</button>
 
-      <div class="ph-head" style="margin-top:24px">
+      <div class="ph-head" style="margin-top:26px">
         <div class="field-label" style="margin:0">Снятые страницы</div>
         <span class="ph-count" id="doc-count">0 / 20</span>
       </div>
@@ -1021,7 +1310,7 @@
       <p class="hint" id="doc-hint">Нажмите на страницу, чтобы посмотреть; крестик — удалить.</p>
 
       <div class="spacer"></div>
-      <button class="btn btn-ghost" id="doc-share-all" disabled>Поделиться</button>
+      <button class="btn btn-ghost ic-share" id="doc-share-all" disabled>Поделиться</button>
       <button class="btn-text" id="doc-clear" hidden>Удалить все страницы</button>
     </section>
 
@@ -1052,17 +1341,15 @@
     <!-- ЭКРАН: спасибо -->
     <section class="view" id="view-thanks">
       <div class="check">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5 11-11" stroke="#D6303F"
-             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12.5l5 5 11-11" stroke="#fff"
+             stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <div class="thx-h" id="thanks-h">Спасибо<br>за ваш отзыв!</div>
       <p id="thanks-note">Ваша оценка зафиксирована и передана в службу контроля качества.</p>
-      <button class="btn btn-primary" id="btn-home" style="max-width:220px">&#8592; На главную</button>
+      <button class="btn btn-primary" id="btn-home">На главную</button>
     </section>
 
   </div>
-
-  <div class="navdots" id="navdots" hidden><i></i><i></i><i></i></div>
 
   <div class="zoom" id="zoom" hidden>
     <div class="zoom-top">

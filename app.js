@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.7.1',
+  APP_VERSION: '2.8.0',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -193,7 +193,7 @@ function showVersionWarning() {
   bar.id = 'ver-warn';
   bar.style.cssText =
     'position:fixed;left:0;right:0;bottom:0;z-index:200;background:#A5202B;color:#fff;' +
-    'font-family:Inter,sans-serif;font-size:13px;line-height:1.45;padding:13px 16px;' +
+    'font-family:"Golos Text",sans-serif;font-size:14px;line-height:1.45;padding:13px 16px;' +
     'display:flex;gap:12px;align-items:center;justify-content:space-between';
   bar.innerHTML =
     '<span>Файлы приложения разных версий. Нужно обновить.</span>' +
@@ -252,8 +252,9 @@ function normPassword(s) {
 /* ---------- Навигация ---------- */
 const SCREENS = {
   'view-boot':    { sub: '',                back: null,           dots: 0 },
-  'view-login':   { sub: 'Вход',            back: null,           dots: 0 },
-  'view-home':    { sub: 'Главная',         back: null,           dots: 0 },
+  // На входе и главной подпись не нужна: экран сам говорит, где пользователь.
+  'view-login':   { sub: '',                back: null,           dots: 0 },
+  'view-home':    { sub: '',                back: null,           dots: 0 },
   'view-appeal':  { sub: 'Ящик обращений',  back: 'view-home',    dots: 0 },
   'view-diag':    { sub: 'Диагностика',     back: 'view-login',   dots: 0 },
   'view-eco':     { sub: 'Советы по эко-вождению',    back: 'view-home',    dots: 0 },
@@ -273,6 +274,8 @@ const SCREENS = {
 function goTo(id) {
   const meta = SCREENS[id] || {};
   if (!$('#' + id)) { console.error('[PRIMUM] Нет экрана', id); showVersionWarning(); return; }
+  // Приложение может быть открыто с утра до вечера — приветствие обновляем.
+  if (id === 'view-home' && state.session) paintGreeting();
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === id));
   const sub = $('#head-sub');
   if (sub) sub.textContent = meta.sub || '';
@@ -705,7 +708,12 @@ function validateRating() {
 function assignedTractor() { return (state.session && state.session.tractor) || ''; }
 function assignedTrailer() { return (state.session && state.session.trailer) || ''; }
 
-/** Номера на главной: «тягач: AB 1234-7 / прицеп: A 1120 C-7». */
+/** Госномер в виде таблички (класс .lp в index.html). */
+function plateHtml(n) {
+  return '<span class="lp">' + escapeHtml(n) + '</span>';
+}
+
+/** Номера на главной: подписи «Тягач» и «Прицеп» над табличками. */
 function paintAssignment() {
   const box = $('#home-plate');
   if (!box) return;
@@ -716,8 +724,8 @@ function paintAssignment() {
     box.hidden = false;
     return;
   }
-  box.innerHTML = '<span class="lbl">тягач:</span> ' + escapeHtml(t || '—') +
-                  (tr ? ' <span class="sep">/</span> <span class="lbl">прицеп:</span> ' + escapeHtml(tr) : '');
+  box.innerHTML = '<span class="veh"><span class="veh-l">Тягач</span>' + plateHtml(t || '—') + '</span>' +
+                  (tr ? '<span class="veh"><span class="veh-l">Прицеп</span>' + plateHtml(tr) + '</span>' : '');
   box.hidden = false;
 }
 
@@ -801,9 +809,31 @@ async function doLogin() {
 }
 
 function enterHome() {
-  $('#greet').textContent = 'Здравствуйте, ' + shortName(state.session.fio);
   paintAssignment();
   goTo('view-home');
+}
+
+/** Приветствие по времени суток. */
+function dayGreeting(hour) {
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 18) return 'Добрый день';
+  if (hour >= 18 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+/** Шапка главной: «Добрый день,» / имя и отчество / «Суббота, 4 октября». */
+function paintGreeting() {
+  const name = shortName(state.session.fio);
+  const hi = $('#greet-hi');
+  if (!hi) { $('#greet').textContent = 'Здравствуйте, ' + name; return; }
+  const now = new Date();
+  hi.textContent = dayGreeting(now.getHours()) + ',';
+  $('#greet').textContent = name;
+  const date = $('#greet-date');
+  if (date) {
+    const s = now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+    date.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+  }
 }
 
 /** «Иванов Иван Иванович» → «Иван Иванович» (обращение по имени). */
@@ -825,6 +855,16 @@ async function doLogout() {
 }
 
 /* ---------- Шкала оценки ---------- */
+
+/** Словами рядом с числом — сразу видно, что выбрано именно то, что хотели. */
+function ratingWord(n) {
+  if (n <= 2) return 'Очень плохо';
+  if (n <= 4) return 'Плохо';
+  if (n <= 6) return 'Удовлетворительно';
+  if (n <= 8) return 'Хорошо';
+  return 'Отлично';
+}
+
 function buildScale() {
   const scale = $('#scale');
   if (!scale) { missingEls.push('#scale'); return; }
@@ -838,6 +878,8 @@ function buildScale() {
     dot.addEventListener('click', () => {
       state.rating = i;
       $('#rating-val').innerHTML = i + '<small>/10</small>';
+      const word = $('#rating-word');
+      if (word) word.textContent = ratingWord(i);
       $$('#scale .dot').forEach((d, idx) => {
         d.classList.toggle('on', idx < i);
         d.classList.toggle('pick', idx === i);
@@ -1355,8 +1397,10 @@ function paintInfoProgress(idx) {
   if (idx === infoIdx) return;
   infoIdx = idx;
   // Новый слайд должен начинаться с верха, даже если предыдущий пролистали вниз.
-  const top = track.getBoundingClientRect().top;
-  if (top < 0) window.scrollBy({ top: top - 110, behavior: 'smooth' });
+  // Шапка закреплена сверху и перекрывает начало ленты — учитываем её высоту.
+  const head = $('.app-head');
+  const top = track.getBoundingClientRect().top - (head ? head.offsetHeight : 0);
+  if (top < 0) window.scrollBy({ top: top - 70, behavior: 'smooth' });
 }
 
 function openNewbieItem(i) {
@@ -1474,7 +1518,7 @@ function startAppeal() {
   state.vehicle = t;
   $('#appeal-vehicle').hidden = !t;
   $('#wrap-vehicle').hidden = !!t;
-  if (t) $('#appeal-vehicle-t').textContent = t;
+  if (t) $('#appeal-vehicle-t').innerHTML = plateHtml(t);
 
   $('#in-topic').value = '';
   $('#in-topic-custom').value = '';
@@ -2306,6 +2350,8 @@ function startSurvey() {
   $('#in-service').value = '';
   $('#in-comment').value = '';
   $('#rating-val').innerHTML = '&#8212;<small>/10</small>';
+  const word = $('#rating-word');
+  if (word) word.textContent = '';
   $$('#scale .dot').forEach((d) => d.classList.remove('on', 'pick'));
 
   // Есть закреплённое ТС — шаг с вводом номеров водителю не нужен.
@@ -2315,7 +2361,7 @@ function startSurvey() {
   if (state.vehicleAssigned) {
     state.tractor = t;
     state.trailer = tr;
-    $('#rating-vehicle-t').textContent = tr ? t + ' / ' + tr : t;
+    $('#rating-vehicle-t').innerHTML = plateHtml(t) + (tr ? plateHtml(tr) : '');
     line.hidden = false;
     SCREENS['view-rating'].back = 'view-home';
     SCREENS['view-rating'].dots = 1; SCREENS['view-rating'].of = 2;
