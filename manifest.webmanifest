@@ -1,6 +1,6 @@
 {
-  "name": "Driver's assistant",
-  "short_name": "Driver's assistant",
+  "name": "Помощник водителя",
+  "short_name": "Помощник водителя",
   "description": "Оценка качества ремонта, ящик обращений и материалы по эко-вождению",
   "lang": "ru",
   "dir": "ltr",

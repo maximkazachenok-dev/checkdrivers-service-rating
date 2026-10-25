@@ -4,7 +4,7 @@
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbynbShMxoDI44rrbZRf-KlqZtjbi89RnmeDtw--V60gidjyUdr03sDW-fHz8pW-sJ7w/exec',
   SHARED_TOKEN: 'primum-fleet-8842-xyz',
-  APP_VERSION: '2.8.0',
+  APP_VERSION: '2.8.1',
   SERVICE_CENTERS: ['Минск', 'Челябинск', 'Улан-Удэ', 'Алматы']
   // Список сотрудников и автопарк грузятся с сервера (листы Employees и Fleet)
   // и кэшируются в IndexedDB. Пароли на клиент не передаются никогда.
@@ -2157,7 +2157,7 @@ function finishDocPage(work, quad, sheetFound, t0) {
 function docFileName(page, i) {
   const d = new Date(page.created_at || Date.now());
   const two = (n) => (n < 10 ? '0' : '') + n;
-  return 'Drivers-assistant_' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) +
+  return 'Pomoshchnik-voditelya_' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) +
          '_' + (i + 1) + '.jpg';
 }
 
